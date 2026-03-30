@@ -1,0 +1,16 @@
+services:
+  short-link:
+    build: .
+    image: short-link:0.0.1
+    container_name: short-link_0.0.1
+    ports:
+      - "5201:5201"
+    environment:
+      - BASE_URL=http://localhost:5201
+      - DATABASE_URL=sqlite+aiosqlite:////code/data/short_links.db
+    volumes:
+      - short-link-data:/code/data
+
+volumes:
+  short-link-data:
+    name: short-link-data
