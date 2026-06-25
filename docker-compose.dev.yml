@@ -1,8 +1,8 @@
 services:
   link-withu:
-    image: xwithu/link-withu:latest
-    container_name: link-withu
-    restart: unless-stopped
+    build: .
+    image: link-withu:local
+    container_name: link-withu-dev
     ports:
       - "5201:5201"
     environment:

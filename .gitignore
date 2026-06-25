@@ -1,4 +1,2 @@
-backend/.venv
-backend/short_links.db
-frontend/node_modules
-frontend/dist
+.env
+data

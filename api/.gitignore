@@ -1,0 +1,4 @@
+uv.lock
+.venv
+short_links.db
+/**/__pycache__
