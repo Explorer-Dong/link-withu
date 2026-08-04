@@ -1,7 +1,11 @@
-web/node_modules
-web/dist
+.github
+.git
 api/.venv
 api/**/__pycache__
-.git
-.env
+api/*.db
+data
+docs
+web/node_modules
+web/dist
+/**/.env
 *.md

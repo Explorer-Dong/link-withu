@@ -1,3 +1,9 @@
+# dry run
+FROM alpine AS debug-context
+WORKDIR /context
+COPY . .
+RUN find . -mindepth 1 | sort
+
 # build web frontend
 FROM node:24-alpine AS web
 WORKDIR /proj/web
