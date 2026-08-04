@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://hub.docker.com/repository/docker/xwithu/link-withu">
+  <a href="https://hub.docker.com/r/xwithu/link-withu/tags">
     <img src="https://img.shields.io/docker/v/xwithu/link-withu?color=blue" alt="Docker Image Version"/>
   </a>
 </p>
