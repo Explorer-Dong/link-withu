@@ -15,7 +15,7 @@
 <p align="center">
   <a href="#快速开始"><strong>快速开始</strong></a>
   &middot;
-  <a href="./docs/manual.md"><strong>用户手册</strong></a>
+  <a href="./docs/user-manual.md"><strong>用户手册</strong></a>
 </p>
 
 <p align="center">
@@ -55,4 +55,4 @@ echo "ADMIN_PASSWORD=<your_admin_password>" > .env
 docker compose up -d
 ```
 
-阅读 [用户手册](./docs/manual.md) 查看更详细的使用指南。
+阅读 [用户手册](./docs/user-manual.md) 查看更详细的使用指南。
