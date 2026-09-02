@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import ShortLink, Visit
+from app.services.client_ip import get_client_ip
 
 router = APIRouter(tags=["redirect"])
 
@@ -26,7 +27,7 @@ async def redirect(
 
     visit = Visit(
         short_link_id=link.id,
-        ip=request.client.host if request.client else None,
+        ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     db.add(visit)
