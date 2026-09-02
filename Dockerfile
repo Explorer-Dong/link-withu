@@ -1,9 +1,3 @@
-# dry run
-FROM alpine AS debug-context
-WORKDIR /context
-COPY . .
-RUN find . -mindepth 1 | sort
-
 # build web frontend
 FROM node:24-alpine AS web
 WORKDIR /proj/web
@@ -16,6 +10,8 @@ FROM python:3.13-alpine
 WORKDIR /proj/api
 ENV PYTHONUNBUFFERED=1
 ENV FRONTEND_DIST=/proj/web/dist
+ENV DATABASE_URL=sqlite+aiosqlite:////proj/data/short_links.db
+RUN mkdir -p /proj/data
 COPY --from=web /proj/web/dist ../web/dist
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 COPY api/ ./

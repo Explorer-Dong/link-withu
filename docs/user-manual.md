@@ -8,10 +8,12 @@
 
 ## 环境变量
 
-| 变量名 | 必填 | 默认值 | 说明 |
+可被 docker-compose.yml 文件同目录的 `.env` 覆盖：
+
+| 环境变量 | 数据类型 | 默认值 | 变量说明 |
 | --- | --- | --- | --- |
-| `ADMIN_PASSWORD` | 是 | 无 | 管理员密码。用于登录管理员，登录后 24 小时内可查看统计和删除短链。 |
-| `BASE_URL` | 否 | `http://localhost:5201` | 生成短链时使用的公开访问地址。部署到域名后应改成实际域名，例如 `https://link.example.com`。 |
-| `DATABASE_URL` | 否 | `sqlite+aiosqlite:///./short_links.db` | 后端数据库连接地址。Docker Compose 中默认使用 `/proj/data/short_links.db` 以便通过数据卷持久化。 |
-| `FRONTEND_DIST` | 否 | 无 | 前端构建产物目录。官方 Docker 镜像内使用 `/proj/web/dist`；本地后端开发时不配置即可。 |
-| `RANDOM_CODE_LENGTH` | 否 | `6` | 随机短码长度。 |
+| `ADMIN_PASSWORD` | `str` | `admin` | 管理员登录密码，登录后 24 小时内免密 |
+| `BASE_URL` | `str` | `http://localhost:5201` | 短链的公开访问地址，生产环境改为对应的域名服务，例如：`https://go.example.com` |
+| `RANDOM_CODE_LENGTH` | `int` | `6` | 随机短码长度 |
+| `TRUSTED_PROXY_COUNT` | `int` | `0` | 前置可信反代层数。直接部署填 0；使用 Nginx 反代服务需 +1 并配置 `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`；使用 CDN 需再 +1 |
+| `APP_NAME` | `str` | `Link WithU` | 管理面板名称 |

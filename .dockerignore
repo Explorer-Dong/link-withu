@@ -8,4 +8,5 @@ docs
 web/node_modules
 web/dist
 /**/.env
+LICENSE
 *.md

@@ -1,14 +1,27 @@
 services:
-  link-withu:
-    build: .
-    image: link-withu:local
-    container_name: link-withu-dev
+  api:
+    image: ghcr.io/astral-sh/uv:python3.13-alpine
+    container_name: link-withu-local-api
+    working_dir: /proj/api
+    command: sh -c "uv sync && uv run fastapi dev app/main.py --host 0.0.0.0 --port 5201"
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
     ports:
       - "5201:5201"
-    environment:
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在 .env 中设置 ADMIN_PASSWORD}
-      BASE_URL: ${BASE_URL:-http://localhost:5201}
-      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:////proj/data/short_links.db}
-      FRONTEND_DIST: ${FRONTEND_DIST:-/proj/web/dist}
     volumes:
-      - ./data:/proj/data
+      - ./api:/proj/api
+      - ./api/.venv:/proj/api/.venv
+
+  web:
+    image: node:24-alpine
+    container_name: link-withu-local-web
+    tty: true
+    working_dir: /proj/web
+    command: sh -c "npm i && npm run dev -- --host 0.0.0.0"
+    environment:
+      API_PROXY: http://api:5201
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/proj/web
+      - ./web/node_modules:/proj/web/node_modules

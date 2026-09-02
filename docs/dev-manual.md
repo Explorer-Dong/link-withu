@@ -1,39 +1,10 @@
 # 开发手册
 
-## Web
+一键启动容器化开发环境：
 
 ```bash
-cd web
-npm i
-npm run dev
+docker compose -f docker-compose.dev.yml up
 ```
 
-## API
-
-```bash
-cd api
-uv venv
-uv sync
-source .venv/bin/activate
-uv run uvicorn app.main:app --reload --port 5201
-```
-
-## Docker
-
-dry run:
-
-```bash
-docker build --target debug-context --no-cache --progress=plain .
-```
-
-预览构建：
-
-```bash
-docker compose -f docker-compose.dev.yml up -d --build
-```
-
-生产构建：
-
-```bash
-docker build -t link-withu:<v0.1.0> -t link-withu:latest .
-```
+- 前端 <http://127.0.0.1:5173>，支持热重载。
+- 后端 <http://127.0.0.1:5201>，支持热重载。接口文档 <http://127.0.0.1:5201/docs>。

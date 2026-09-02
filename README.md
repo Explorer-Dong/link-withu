@@ -16,6 +16,8 @@
   <a href="#快速开始"><strong>快速开始</strong></a>
   &middot;
   <a href="./docs/user-manual.md"><strong>用户手册</strong></a>
+  &middot;
+  <a href="./docs/dev-manual.md"><strong>参与贡献</strong></a>
 </p>
 
 <p align="center">
@@ -34,10 +36,8 @@
 docker run -d \
   --name link-withu \
   -p 5201:5201 \
-  -e ADMIN_PASSWORD='请替换为你的管理员密码' \
-  -e BASE_URL='http://localhost:5201' \
-  -e DATABASE_URL='sqlite+aiosqlite:////proj/data/short_links.db' \
-  -e FRONTEND_DIST='/proj/web/dist' \
+  -e ADMIN_PASSWORD='<your_password>' \
+  -e BASE_URL='<your_server_ip>' \
   -v ./data:/proj/data \
   xwithu/link-withu:latest
 ```
@@ -48,11 +48,20 @@ docker run -d \
 # 下载 docker-compose.yml 文件
 wget https://raw.githubusercontent.com/Explorer-Dong/link-withu/refs/heads/main/docker-compose.yml
 
-# 设置管理员密码
-echo "ADMIN_PASSWORD=<your_admin_password>" > .env
+# 下载并配置环境变量
+wget https://raw.githubusercontent.com/Explorer-Dong/link-withu/refs/heads/main/.env.example -O .env
+# 配置密码、域名等参数
 
 # 启动 Link Withu
 docker compose up -d
 ```
 
-阅读 [用户手册](./docs/user-manual.md) 查看更详细的使用指南。
+阅读 [用户手册](./docs/user-manual.md) 作进一步了解。
+
+## 参与贡献
+
+阅读 [开发手册](./docs/dev-manual.md) 作进一步了解。
+
+## 开源协议
+
+[MIT](./LICENSE)

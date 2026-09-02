@@ -1,14 +1,13 @@
 services:
   link-withu:
     image: xwithu/link-withu:latest
-    container_name: link-withu
+    container_name: link-withu_latest
     restart: unless-stopped
     ports:
       - "5201:5201"
     environment:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在 .env 中设置 ADMIN_PASSWORD}
       BASE_URL: ${BASE_URL:-http://localhost:5201}
-      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:////proj/data/short_links.db}
-      FRONTEND_DIST: ${FRONTEND_DIST:-/proj/web/dist}
+      TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-0}
     volumes:
       - ./data:/proj/data
