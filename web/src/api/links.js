@@ -43,6 +43,22 @@ export async function adminLogin(password) {
   return res.json()
 }
 
+export async function updateLink(shortCode, originalUrl, token) {
+  const res = await fetch(`${BASE}/api/links/${encodeURIComponent(shortCode)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...adminHeaders(token),
+    },
+    body: JSON.stringify({ original_url: originalUrl }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || '修改失败')
+  }
+  return res.json()
+}
+
 export async function deleteLink(shortCode, token) {
   const res = await fetch(`${BASE}/api/links/${encodeURIComponent(shortCode)}`, {
     method: 'DELETE',

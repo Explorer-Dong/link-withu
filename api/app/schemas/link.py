@@ -3,6 +3,15 @@ from datetime import datetime
 from pydantic import BaseModel, field_validator
 
 
+def _normalize_url(v: str) -> str:
+    v = v.strip()
+    if not v:
+        raise ValueError("URL 不能为空")
+    if not (v.startswith("http://") or v.startswith("https://")):
+        v = "https://" + v
+    return v
+
+
 class ShortLinkCreate(BaseModel):
     """创建短链请求"""
     original_url: str
@@ -11,12 +20,7 @@ class ShortLinkCreate(BaseModel):
     @field_validator("original_url")
     @classmethod
     def url_must_be_valid(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("URL 不能为空")
-        if not (v.startswith("http://") or v.startswith("https://")):
-            v = "https://" + v
-        return v
+        return _normalize_url(v)
 
     @field_validator("short_code")
     @classmethod
@@ -31,6 +35,16 @@ class ShortLinkCreate(BaseModel):
         if not all(c.isalnum() or c in "-_" for c in v):
             raise ValueError("短码只能包含字母、数字、横线、下划线")
         return v
+
+
+class ShortLinkUpdate(BaseModel):
+    """修改短链请求（仅支持修改原始链接，短码不可改）"""
+    original_url: str
+
+    @field_validator("original_url")
+    @classmethod
+    def url_must_be_valid(cls, v: str) -> str:
+        return _normalize_url(v)
 
 
 class ShortLinkResponse(BaseModel):

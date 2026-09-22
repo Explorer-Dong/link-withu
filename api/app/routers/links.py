@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import ShortLink, Visit
-from app.schemas import ShortLinkCreate, ShortLinkResponse, ShortLinkListResponse, VisitStatsResponse
+from app.schemas import ShortLinkCreate, ShortLinkUpdate, ShortLinkResponse, ShortLinkListResponse, VisitStatsResponse
 from app.services import ShortCodeService
 from app.services.admin_auth import verify_admin_token
 from app.config import settings
@@ -137,6 +137,37 @@ async def get_visit_stats(
             }
             for v in visits
         ],
+    )
+
+
+@router.put("/{short_code}", response_model=ShortLinkResponse)
+async def update_short_link(
+    short_code: str,
+    body: ShortLinkUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(verify_admin_token),
+):
+    """修改短链（仅支持修改原始链接，短码不可改）"""
+    result = await db.execute(select(ShortLink).where(ShortLink.short_code == short_code))
+    link = result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404, detail="短链不存在")
+
+    link.original_url = body.original_url
+    await db.flush()
+    await db.refresh(link)
+
+    count_result = await db.execute(
+        select(func.count(Visit.id)).where(Visit.short_link_id == link.id)
+    )
+    return ShortLinkResponse(
+        id=link.id,
+        short_code=link.short_code,
+        original_url=link.original_url,
+        short_url=_short_url(link.short_code),
+        is_custom=bool(link.is_custom),
+        created_at=link.created_at,
+        visit_count=count_result.scalar() or 0,
     )
 
 

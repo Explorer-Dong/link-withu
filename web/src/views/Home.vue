@@ -73,6 +73,7 @@
           </div>
           <div class="link-actions">
             <button type="button" class="btn small" @click="copyItem(item)">复制</button>
+            <button type="button" class="btn small" @click="openEdit(item)">编辑</button>
             <button type="button" class="btn small" @click="openStats(item)">统计</button>
             <button type="button" class="btn small danger-btn" @click="onDelete(item)">删除</button>
           </div>
@@ -89,6 +90,40 @@
     <Transition name="toast">
       <div v-if="toast" class="toast">{{ toast }}</div>
     </Transition>
+
+    <div v-if="editModal" class="modal-overlay" @click.self="closeEdit">
+      <div class="modal edit-modal">
+        <div class="modal-head">
+          <h3>修改短链 · /r/{{ editModal.short_code }}</h3>
+          <button type="button" class="modal-close" @click="closeEdit">×</button>
+        </div>
+        <div class="modal-body">
+          <form @submit.prevent="onSaveEdit" class="form">
+            <div class="field">
+              <label for="edit-short-code">短码（不可修改）</label>
+              <input id="edit-short-code" type="text" :value="editModal.short_code" readonly class="readonly-input" />
+            </div>
+            <div class="field">
+              <label for="edit-url">原始链接</label>
+              <input
+                id="edit-url"
+                v-model="editModal.original_url"
+                type="url"
+                placeholder="https://example.com/very-long-url"
+                required
+              />
+            </div>
+            <p v-if="editError" class="error">{{ editError }}</p>
+            <div class="edit-actions">
+              <button type="button" class="btn secondary" @click="closeEdit">取消</button>
+              <button type="submit" class="btn primary" :disabled="editSaving">
+                {{ editSaving ? '保存中…' : '保存' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
 
     <div v-if="statsModal" class="modal-overlay" @click.self="statsModal = null">
       <div class="modal">
@@ -125,7 +160,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { createLink, listLinks, deleteLink, getStats, adminLogin } from '../api/links'
+import { createLink, listLinks, updateLink, deleteLink, getStats, adminLogin } from '../api/links'
 
 const form = ref({ originalUrl: '', shortCode: '' })
 const loading = ref(false)
@@ -136,6 +171,9 @@ const resultInput = ref(null)
 const list = ref({ total: 0, items: [] })
 const listLoading = ref(false)
 const statsModal = ref(null)
+const editModal = ref(null)
+const editError = ref('')
+const editSaving = ref(false)
 
 const searchInput = ref('')
 const searchQuery = ref('')
@@ -258,6 +296,35 @@ function copyItem(item) {
   navigator.clipboard.writeText(item.short_url).then(() => {
     showToast('已复制到剪贴板')
   })
+}
+
+function openEdit(item) {
+  editError.value = ''
+  editModal.value = { short_code: item.short_code, original_url: item.original_url }
+}
+
+function closeEdit() {
+  editModal.value = null
+  editError.value = ''
+}
+
+async function onSaveEdit() {
+  if (!editModal.value) return
+  editError.value = ''
+  editSaving.value = true
+  try {
+    const token = await ensureAdminToken()
+    if (!token) return
+    await updateLink(editModal.value.short_code, editModal.value.original_url.trim(), token)
+    showToast('已保存')
+    closeEdit()
+    loadList()
+  } catch (e) {
+    if (e.message?.includes('过期') || e.message?.includes('无效') || e.message?.includes('登录')) clearAdminSession()
+    editError.value = e.message || '修改失败'
+  } finally {
+    editSaving.value = false
+  }
 }
 
 async function onDelete(item) {
@@ -423,6 +490,9 @@ onUnmounted(() => {
   .modal-head h3 { margin: 0; font-size: 1rem; }
   .modal-close { background: var(--control-bg); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 1.2rem; cursor: pointer; line-height: 1; }
   .modal-body { padding: 1.2rem; overflow: auto; }
+  .edit-modal { max-width: 520px; }
+  .readonly-input { opacity: 0.7; cursor: not-allowed; }
+  .edit-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
   .stats-original { color: var(--muted); font-size: 0.9rem; word-break: break-all; margin: 0 0 0.5rem; }
   .stats-total { margin: 0 0 1rem; }
   .visits-table-wrap { overflow-x: auto; }
