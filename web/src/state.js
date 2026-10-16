@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { version } from "../package.json";
 
 const SESSION_KEY = "link-withu-admin-session";
 function readSession() {
@@ -10,7 +11,7 @@ function readSession() {
   }
 }
 export const session = ref(readSession());
-export const site = ref({ app_name: "Link WithU", version: "1.0.0" });
+export const site = ref({ app_name: "Link WithU", version });
 export const tags = ref([]);
 export const toast = ref(null);
 let toastTimer;

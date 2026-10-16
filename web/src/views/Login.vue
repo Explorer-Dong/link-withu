@@ -71,7 +71,7 @@ async function login() {
         href="https://github.com/Explorer-Dong/link-withu"
         target="_blank"
         rel="noreferrer"
-        >v1.0.0</a
+        >v{{ site.version }}</a
       >
     </p>
   </div>

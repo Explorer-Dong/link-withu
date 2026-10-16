@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -72,5 +72,5 @@ class LinkTag(Base):
 class AppSetting(Base):
     __tablename__ = "app_settings"
 
-    key = Column(String(40), primary_key=True)
-    value = Column(Text, nullable=False)
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)

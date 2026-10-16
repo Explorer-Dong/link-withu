@@ -17,7 +17,7 @@ router = APIRouter(tags=["redirect"])
 async def redirect(
     short_code: str,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """根据短码跳转到原始 URL，并记录访问"""
     result = await db.execute(

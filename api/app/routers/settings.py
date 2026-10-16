@@ -7,9 +7,10 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import ValidationError
-from sqlalchemy import delete, func, insert, select, text
+from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import __version__
 from app.config import settings
 from app.database import engine, get_db
 from app.models import AppSetting, LinkTag, ShortLink, Visit
@@ -24,12 +25,12 @@ MAX_BACKUP_BYTES = 50 * 1024 * 1024
 
 
 @router.get("/settings")
-async def read_settings(db: AsyncSession = Depends(get_db)):
+async def read_settings(db: AsyncSession = Depends(get_db, scope="function")):
     path = engine.url.database
     size = Path(path).stat().st_size if path and Path(path).is_file() else 0
     return {
         "site": (await get_site_settings(db)).model_dump(),
-        "version": "1.0.0",
+        "version": __version__,
         "database_bytes": size,
         "trusted_proxy_count": settings.trusted_proxy_count,
         "max_restore_bytes": MAX_BACKUP_BYTES,
@@ -39,57 +40,83 @@ async def read_settings(db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/settings", response_model=SiteSettings)
-async def update_settings(body: SiteSettings, db: AsyncSession = Depends(get_db)):
+async def update_settings(
+    body: SiteSettings, db: AsyncSession = Depends(get_db, scope="function")
+):
     await save_site_settings(db, body)
     return await get_site_settings(db)
 
 
 @router.get("/backup")
-async def backup(db: AsyncSession = Depends(get_db)):
-    # Explicit read transaction makes links, tags, visits, and settings one snapshot.
-    await db.execute(text("BEGIN"))
+async def backup(db: AsyncSession = Depends(get_db, scope="function")):
+    # get_db holds one read snapshot across links, tags, visits, and settings.
     site = await get_site_settings(db)
-    links = (await db.execute(select(ShortLink).order_by(ShortLink.id))).scalars().all()
-    visits = (await db.execute(select(Visit).order_by(Visit.id))).scalars().all()
     now = datetime.now(UTC)
     data = {
         "format": "link-withu-backup",
         "version": 1,
         "exported_at": now.isoformat(),
         "settings": site.model_dump(),
-        "links": [
-            {
-                "id": link.id,
-                "short_code": link.short_code,
-                "original_url": link.original_url,
-                "title": link.title,
-                "note": link.note,
-                "tags": sorted(t.name for t in link.tags),
-                "is_custom": bool(link.is_custom),
-                "created_at": link.created_at.isoformat() + "Z",
-            }
-            for link in links
-        ],
-        "visits": [
-            {
-                "id": visit.id,
-                "short_link_id": visit.short_link_id,
-                "visited_at": visit.visited_at.isoformat() + "Z",
-                "ip": visit.ip,
-                "user_agent": visit.user_agent,
-                "referrer_domain": visit.referrer_domain,
-                "device": visit.device,
-                "browser": visit.browser,
-                "is_bot": bool(visit.is_bot),
-            }
-            for visit in visits
-        ],
     }
-    content = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode()
-    if len(content) > MAX_BACKUP_BYTES:
-        raise HTTPException(413, "便携备份超过 50 MiB，请停机备份挂载的 data 目录")
+    content = bytearray()
+
+    def append(value):
+        chunk = value.encode("utf-8")
+        if len(content) + len(chunk) > MAX_BACKUP_BYTES:
+            raise HTTPException(413, "便携备份超过 50 MiB，请停机备份挂载的 data 目录")
+        content.extend(chunk)
+
+    def encode(value):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+    append(encode(data)[:-1] + ',"links":[')
+    first = True
+    links = await db.stream_scalars(
+        select(ShortLink).order_by(ShortLink.id).execution_options(yield_per=500)
+    )
+    async for link in links:
+        append(
+            ("" if first else ",")
+            + encode(
+                {
+                    "id": link.id,
+                    "short_code": link.short_code,
+                    "original_url": link.original_url,
+                    "title": link.title,
+                    "note": link.note,
+                    "tags": sorted(t.name for t in link.tags),
+                    "is_custom": bool(link.is_custom),
+                    "created_at": link.created_at.isoformat() + "Z",
+                }
+            )
+        )
+        first = False
+    append('],"visits":[')
+    first = True
+    visits = await db.stream_scalars(
+        select(Visit).order_by(Visit.id).execution_options(yield_per=500)
+    )
+    async for visit in visits:
+        append(
+            ("" if first else ",")
+            + encode(
+                {
+                    "id": visit.id,
+                    "short_link_id": visit.short_link_id,
+                    "visited_at": visit.visited_at.isoformat() + "Z",
+                    "ip": visit.ip,
+                    "user_agent": visit.user_agent,
+                    "referrer_domain": visit.referrer_domain,
+                    "device": visit.device,
+                    "browser": visit.browser,
+                    "is_bot": bool(visit.is_bot),
+                }
+            )
+        )
+        first = False
+    append("]}")
     return Response(
-        content,
+        bytes(content),
         media_type="application/json",
         headers={
             "Content-Disposition": f'attachment; filename="link-withu-{now:%Y%m%d-%H%M%S}.json"',
@@ -99,7 +126,9 @@ async def backup(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/restore")
-async def restore(request: Request, db: AsyncSession = Depends(get_db)):
+async def restore(
+    request: Request, db: AsyncSession = Depends(get_db, scope="function")
+):
     if request.headers.get("x-confirm-restore") != "RESTORE":
         raise HTTPException(400, "请确认覆盖恢复操作")
     content = bytearray()

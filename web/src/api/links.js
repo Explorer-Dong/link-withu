@@ -2,8 +2,8 @@ import { session, saveSession } from "../state";
 
 export async function request(path, options = {}) {
   const headers = new Headers(options.headers);
-  if (session.value?.token)
-    headers.set("Authorization", `Bearer ${session.value.token}`);
+  const token = session.value?.token;
+  if (token) headers.set("Authorization", `Bearer ${token}`);
   if (
     options.body &&
     typeof options.body === "string" &&
@@ -12,7 +12,11 @@ export async function request(path, options = {}) {
     headers.set("Content-Type", "application/json");
   const res = await fetch(path, { ...options, headers });
   if (!res.ok) {
-    if (res.status === 401 && !path.endsWith("/login")) {
+    if (
+      res.status === 401 &&
+      !path.endsWith("/login") &&
+      token === session.value?.token
+    ) {
       saveSession(null);
       window.dispatchEvent(new Event("auth-expired"));
     }

@@ -8,9 +8,11 @@ import "./style.css";
 const route = useRoute();
 const media = matchMedia("(prefers-color-scheme: dark)");
 const refreshTags = async () => {
-  if (session.value)
+  const token = session.value?.token;
+  if (token)
     try {
-      tags.value = await api("/api/links/tags");
+      const result = await api("/api/links/tags");
+      if (session.value?.token === token) tags.value = result;
     } catch {
       /* views show request failures */
     }

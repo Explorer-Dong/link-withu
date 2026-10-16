@@ -30,7 +30,9 @@ def client():
                 for model in [Visit, LinkTag, ShortLink, AppSetting]:
                     await conn.execute(delete(model))
 
-        client.portal.call(clear)
+        portal = client.portal
+        assert portal is not None
+        portal.call(clear)
         yield client
 
 

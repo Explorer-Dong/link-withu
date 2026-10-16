@@ -71,11 +71,12 @@ function logout() {
 async function chooseFile(event) {
   const file = event.target.files?.[0];
   event.target.value = "";
-  if (!file) return;
+  if (!file || saving.value || busy.value) return;
   if (file.size > info.value.max_restore_bytes) {
     notify("恢复文件不能超过 50 MiB", true);
     return;
   }
+  busy.value = "preview";
   try {
     const data = JSON.parse(await file.text());
     if (
@@ -93,6 +94,8 @@ async function chooseFile(event) {
     confirmation.value = "";
   } catch {
     notify("请选择有效的 Link WithU JSON 备份文件", true);
+  } finally {
+    busy.value = "";
   }
 }
 async function restore() {
@@ -138,6 +141,7 @@ onMounted(load);
           <label
             >站点名称<input
               v-model="form.app_name"
+              :disabled="saving || !!busy"
               required
               maxlength="60" /></label
           ><label
@@ -145,6 +149,7 @@ onMounted(load);
               aria-label="公开访问地址"
               aria-describedby="base-url-help"
               v-model="form.base_url"
+              :disabled="saving || !!busy"
               required
               placeholder="https://go.example.com"
               maxlength="2048"
@@ -153,13 +158,14 @@ onMounted(load);
           <label
             >随机短码长度<input
               v-model.number="form.random_code_length"
+              :disabled="saving || !!busy"
               type="number"
               min="4"
               max="16"
               required
           /></label>
           <div class="settings-save">
-            <button class="btn primary" :disabled="saving">
+            <button class="btn primary" :disabled="saving || !!busy">
               {{ saving ? "保存中…" : "保存设置" }}
             </button>
           </div>
@@ -231,7 +237,11 @@ onMounted(load);
           完整 JSON 备份，包含短链、标签、访问记录与站点设置。
         </p>
         <div class="backup-actions">
-          <button class="btn primary" :disabled="!!busy" @click="exportAllData">
+          <button
+            class="btn primary"
+            :disabled="saving || !!busy"
+            @click="exportAllData"
+          >
             <Icon name="download" :size="18" />{{
               busy === "backup" ? "导出中…" : "导出全部数据"
             }}
@@ -244,7 +254,11 @@ onMounted(load);
             aria-label="选择备份文件"
             @change="chooseFile"
           />
-          <button class="btn" :disabled="!!busy" @click="fileInput.click()">
+          <button
+            class="btn"
+            :disabled="saving || !!busy"
+            @click="fileInput.click()"
+          >
             从备份恢复
           </button>
         </div>

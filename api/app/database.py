@@ -1,3 +1,4 @@
+from fastapi import Request
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
@@ -29,10 +30,20 @@ def sqlite_setup(connection, _):
         cursor.close()
 
 
-async def get_db():
+async def get_db(request: Request):
     """依赖：获取数据库会话"""
     async with AsyncSessionLocal() as session:
         try:
+            if engine.dialect.name == "sqlite":
+                writes = request.method in {
+                    "POST",
+                    "PUT",
+                    "PATCH",
+                    "DELETE",
+                } or request.url.path.startswith("/r/")
+                # Start a real transaction before reads or nested savepoints.
+                # Serialize writers before they read to avoid lock-upgrade deadlocks.
+                await session.execute(text("BEGIN IMMEDIATE" if writes else "BEGIN"))
             yield session
             await session.commit()
         except Exception:

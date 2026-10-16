@@ -7,10 +7,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+SQLITE_MAX_ID = (1 << 63) - 1
+
 
 def normalize_url(value: str) -> str:
     value = value.strip()
-    if not re.match(r"^[a-zA-Z][a-zA-Z\d+.-]*:", value):
+    host_with_port = re.match(r"^[^/?#:@]+:\d+(?:[/?#]|$)", value)
+    if host_with_port or not re.match(r"^[a-zA-Z][a-zA-Z\d+.-]*:", value):
         value = "https://" + value
     try:
         parsed = urlsplit(value)
@@ -129,6 +132,8 @@ class SiteSettings(BaseModel):
     @classmethod
     def valid_base(cls, value):
         value = normalize_url(value).rstrip("/")
+        if len(value) > 2048:
+            raise ValueError("公开地址不能超过 2048 个字符")
         parsed = urlsplit(value)
         if parsed.path or parsed.query or parsed.fragment:
             raise ValueError("公开地址只包含协议、域名和端口")
@@ -144,8 +149,8 @@ class SiteSettings(BaseModel):
         return value
 
 
-class BackupLink(ShortLinkCreate):
-    id: int = Field(gt=0)
+class BackupLink(LinkFields):
+    id: int = Field(gt=0, le=SQLITE_MAX_ID)
     short_code: str = Field(min_length=1)
     is_custom: bool
     created_at: datetime
@@ -169,8 +174,8 @@ class BackupLink(ShortLinkCreate):
 
 
 class BackupVisit(BaseModel):
-    id: int = Field(gt=0)
-    short_link_id: int = Field(gt=0)
+    id: int = Field(gt=0, le=SQLITE_MAX_ID)
+    short_link_id: int = Field(gt=0, le=SQLITE_MAX_ID)
     visited_at: datetime
     ip: str | None = Field(default=None, max_length=45)
     user_agent: str | None = Field(default=None, max_length=8192)

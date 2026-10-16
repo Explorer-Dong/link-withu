@@ -1,6 +1,33 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
+test.beforeEach(async ({ request }) => {
+  const response = await request.post("/api/admin/login", {
+    data: { password: "browser-test-only" },
+  });
+  expect(response.ok()).toBe(true);
+  const { token } = await response.json();
+  const reset = await request.post("/api/admin/restore", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "X-Confirm-Restore": "RESTORE",
+    },
+    data: {
+      format: "link-withu-backup",
+      version: 1,
+      exported_at: new Date().toISOString(),
+      settings: {
+        app_name: "Link WithU",
+        base_url: "http://127.0.0.1:5202",
+        random_code_length: 6,
+      },
+      links: [],
+      visits: [],
+    },
+  });
+  expect(reset.ok()).toBe(true);
+});
+
 async function login(page) {
   await page.goto("/login");
   await page
@@ -305,4 +332,109 @@ test("ten links per page, filter resets and deleting the last page", async ({
     for (const code of codes)
       await request.delete(`/api/links/${code}`, { headers });
   }
+});
+
+test("a delayed unauthorized response cannot clear a new login", async ({
+  page,
+}) => {
+  await login(page);
+  let blocked;
+  const intercepted = new Promise((resolve) => {
+    page.route("**/api/links?**", (route) => {
+      blocked = route;
+      resolve();
+    });
+  });
+  await page
+    .getByRole("navigation", { name: "主导航" })
+    .getByRole("link", { name: "链接管理" })
+    .click();
+  await intercepted;
+  await page
+    .getByRole("navigation", { name: "主导航" })
+    .getByRole("link", { name: "设置" })
+    .click();
+  await page.getByRole("button", { name: "退出登录" }).click();
+  await expect(page).toHaveURL("/login");
+  await page
+    .getByLabel("管理员密码", { exact: true })
+    .fill("browser-test-only");
+  await page.getByRole("button", { name: "登录工作空间" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "访问趋势" })).toBeVisible();
+  const sessionBefore = await page.evaluate(() =>
+    localStorage.getItem("link-withu-admin-session"),
+  );
+  const response = page.waitForResponse(
+    (res) => res.url().includes("/api/links?") && res.status() === 401,
+  );
+  await blocked.fulfill({
+    status: 401,
+    json: { detail: "expired previous session" },
+  });
+  await (await response).finished();
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      ),
+  );
+  expect(
+    await page.evaluate(() => localStorage.getItem("link-withu-admin-session")),
+  ).toBe(sessionBefore);
+  await page
+    .getByRole("navigation", { name: "主导航" })
+    .getByRole("link", { name: "设置" })
+    .click();
+  await expect(page.getByRole("heading", { name: "站点设置" })).toBeVisible();
+});
+
+test("settings save and backup operations cannot overlap", async ({ page }) => {
+  await login(page);
+  await page
+    .getByRole("navigation", { name: "主导航" })
+    .getByRole("link", { name: "设置" })
+    .click();
+  await page.getByLabel("站点名称", { exact: true }).fill("并发保护测试");
+  let saveRequest;
+  const saving = new Promise((resolve) => {
+    page.route("**/api/admin/settings", (route) => {
+      if (route.request().method() !== "PUT") return route.continue();
+      saveRequest = route;
+      resolve();
+    });
+  });
+  await page.getByRole("button", { name: "保存设置" }).click();
+  await saving;
+  await expect(page.getByLabel("站点名称", { exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "导出全部数据", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "从备份恢复", exact: true }),
+  ).toBeDisabled();
+  await saveRequest.fulfill({ response: await saveRequest.fetch() });
+  await expect(page.getByRole("status")).toContainText("设置已保存");
+  let backupRequest;
+  const exporting = new Promise((resolve) => {
+    page.route("**/api/admin/backup", (route) => {
+      backupRequest = route;
+      resolve();
+    });
+  });
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出全部数据", exact: true }).click();
+  await exporting;
+  await expect(
+    page.getByRole("button", { name: "保存设置", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByLabel("站点名称", { exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "从备份恢复", exact: true }),
+  ).toBeDisabled();
+  await backupRequest.fulfill({ response: await backupRequest.fetch() });
+  await download;
+  await expect(
+    page.getByRole("button", { name: "保存设置", exact: true }),
+  ).toBeEnabled();
 });

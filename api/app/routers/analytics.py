@@ -53,7 +53,7 @@ def calendar(site, days):
 
 @router.get("")
 async def analytics(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     days: int = Query(0, ge=0, le=90),
     short_code: str = Query("", max_length=32),
     tag: str = Query("", max_length=40),
@@ -277,7 +277,7 @@ def csv_row(values):
 
 @router.get("/export")
 async def export_csv(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     kind: str = Query("visits", pattern="^(visits|links)$"),
     days: int | None = Query(None, ge=0, le=90),
     short_code: str = Query("", max_length=32),

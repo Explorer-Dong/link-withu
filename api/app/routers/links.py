@@ -1,7 +1,7 @@
 """Private link management. Redirects remain public."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import delete, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,7 +48,9 @@ async def find_link(db, code):
 
 
 @router.post("", response_model=ShortLinkResponse, status_code=201)
-async def create_short_link(body: ShortLinkCreate, db: AsyncSession = Depends(get_db)):
+async def create_short_link(
+    body: ShortLinkCreate, db: AsyncSession = Depends(get_db, scope="function")
+):
     site = await get_site_settings(db)
     for _ in range(5):
         code = body.short_code or await ShortCodeService.get_available_random(
@@ -75,7 +77,7 @@ async def create_short_link(body: ShortLinkCreate, db: AsyncSession = Depends(ge
 
 @router.get("", response_model=ShortLinkListResponse)
 async def list_short_links(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
     q: str = Query("", max_length=200),
@@ -133,7 +135,7 @@ async def list_short_links(
 
 
 @router.get("/tags")
-async def list_tags(db: AsyncSession = Depends(get_db)):
+async def list_tags(db: AsyncSession = Depends(get_db, scope="function")):
     rows = (
         await db.execute(
             select(LinkTag.name, func.count(LinkTag.short_link_id))
@@ -147,7 +149,7 @@ async def list_tags(db: AsyncSession = Depends(get_db)):
 @router.get("/stats/{short_code}", response_model=VisitStatsResponse)
 async def get_visit_stats(
     short_code: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     exclude_bots: bool = False,
@@ -193,7 +195,9 @@ async def get_visit_stats(
 
 @router.put("/{short_code}", response_model=ShortLinkResponse)
 async def update_short_link(
-    short_code: str, body: ShortLinkUpdate, db: AsyncSession = Depends(get_db)
+    short_code: str,
+    body: ShortLinkUpdate,
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     link = await find_link(db, short_code)
     link.original_url, link.title, link.note = body.original_url, body.title, body.note
@@ -206,7 +210,12 @@ async def update_short_link(
 
 
 @router.delete("/{short_code}", status_code=204)
-async def delete_short_link(short_code: str, db: AsyncSession = Depends(get_db)):
-    await db.delete(await find_link(db, short_code))
-    await db.flush()
+async def delete_short_link(
+    short_code: str, db: AsyncSession = Depends(get_db, scope="function")
+):
+    link = await find_link(db, short_code)
+    # Explicit deletes also support legacy foreign keys without ON DELETE CASCADE.
+    await db.execute(delete(Visit).where(Visit.short_link_id == link.id))
+    await db.execute(delete(LinkTag).where(LinkTag.short_link_id == link.id))
+    await db.execute(delete(ShortLink).where(ShortLink.id == link.id))
     return Response(status_code=204)
