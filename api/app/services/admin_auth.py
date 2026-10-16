@@ -19,7 +19,9 @@ def _admin_secret() -> str:
 
 
 def verify_admin_password(password: str) -> None:
-    if not hmac.compare_digest(password, _admin_secret()):
+    if not hmac.compare_digest(
+        password.encode("utf-8"), _admin_secret().encode("utf-8")
+    ):
         raise HTTPException(status_code=401, detail="密码错误")
 
 
@@ -61,13 +63,16 @@ def verify_admin_token(authorization: str = Header("")) -> None:
     except ValueError:
         raise HTTPException(status_code=401, detail="管理员登录无效")
 
+    if not payload.isascii() or not signature.isascii():
+        raise HTTPException(status_code=401, detail="管理员登录无效")
+
     if not hmac.compare_digest(signature, _sign(payload)):
         raise HTTPException(status_code=401, detail="管理员登录无效")
 
     try:
         data = json.loads(_base64url_decode(payload))
         expires_at = int(data.get("exp", 0))
-    except (ValueError, TypeError, json.JSONDecodeError):
+    except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
         raise HTTPException(status_code=401, detail="管理员登录无效")
 
     if expires_at <= int(time.time()):

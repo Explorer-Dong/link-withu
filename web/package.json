@@ -1,19 +1,25 @@
 {
-    "name": "link-withu-web",
-    "private": true,
-    "version": "0.0.1",
-    "type": "module",
-    "scripts": {
-        "dev": "vite",
-        "build": "vite build",
-        "preview": "vite preview"
-    },
-    "dependencies": {
-        "vue": "^3.4.21",
-        "vue-router": "^4.3.0"
-    },
-    "devDependencies": {
-        "@vitejs/plugin-vue": "^5.0.4",
-        "vite": "^5.2.8"
-    }
+  "name": "link-withu-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "format": "prettier --write src tests playwright.config.js",
+    "format:check": "prettier --check src tests playwright.config.js"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.58.0",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "prettier": "^3.9.10",
+    "vite": "^8.3.4"
+  }
 }

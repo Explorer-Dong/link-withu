@@ -1,27 +1,36 @@
 services:
   api:
-    image: ghcr.io/astral-sh/uv:python3.13-alpine
+    image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
     container_name: link-withu-local-api
     working_dir: /proj/api
-    command: sh -c "uv sync && uv run fastapi dev app/main.py --host 0.0.0.0 --port 5201"
+    command: sh -c "uv sync --frozen && uv run uvicorn app.main:app --host 0.0.0.0 --port 5201 --reload --no-proxy-headers"
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      BASE_URL: ${BASE_URL:-http://localhost:5173}
+      APP_NAME: ${APP_NAME:-Link WithU}
+      RANDOM_CODE_LENGTH: ${RANDOM_CODE_LENGTH:-6}
+      TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-0}
+      DATABASE_URL: sqlite+aiosqlite:////proj/api/short_links.db
     ports:
       - "5201:5201"
     volumes:
       - ./api:/proj/api
-      - ./api/.venv:/proj/api/.venv
+      - api-venv:/proj/api/.venv
 
   web:
     image: node:24-alpine
     container_name: link-withu-local-web
-    tty: true
     working_dir: /proj/web
-    command: sh -c "npm i && npm run dev -- --host 0.0.0.0"
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
     environment:
       API_PROXY: http://api:5201
     ports:
       - "5173:5173"
     volumes:
       - ./web:/proj/web
-      - ./web/node_modules:/proj/web/node_modules
+      - web-node-modules:/proj/web/node_modules
+
+volumes:
+  api-venv:
+  web-node-modules:

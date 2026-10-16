@@ -1,43 +1,57 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import init_db
-from app.routers import admin, links, redirect
+from app.database import get_db, init_db
+from app.routers import admin, analytics, links, redirect
+from app.routers import settings as settings_router
+from app.services.site_settings import get_site_settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     yield
-    # shutdown if needed
 
 
-app = FastAPI(
-    title=settings.app_name,
-    lifespan=lifespan,
-)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(admin.router)
-app.include_router(links.router)
-app.include_router(redirect.router)
+app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
+for router in [
+    admin.router,
+    links.router,
+    analytics.router,
+    settings_router.router,
+    redirect.router,
+]:
+    app.include_router(router)
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "1.0.0"}
 
 
-# 静态资源挂载（放在所有路由之后，避免拦截 API 请求）
+@app.get("/api/site")
+async def site_info(db: AsyncSession = Depends(get_db)):
+    site = await get_site_settings(db)
+    return {"app_name": site.app_name, "version": "1.0.0"}
+
+
 if settings.frontend_dist and settings.frontend_dist.is_dir():
-    app.mount("/", StaticFiles(directory=settings.frontend_dist, html=True), name="static")
+    assets = settings.frontend_dist / "assets"
+    if assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets), name="assets")
+
+    @app.get("/favicon.svg", include_in_schema=False)
+    def favicon():
+        return FileResponse(settings.frontend_dist / "favicon.svg")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def frontend(path: str):
+        # Only known client routes receive the SPA shell; invalid APIs stay 404.
+        if path not in {"", "login", "links", "analytics", "settings"}:
+            raise HTTPException(404, "页面不存在")
+        return FileResponse(settings.frontend_dist / "index.html")

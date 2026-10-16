@@ -22,7 +22,9 @@ class ShortCodeService:
         return "".join(random.choices(cls.CHARS, k=length))
 
     @classmethod
-    async def get_available_random(cls, db: AsyncSession, length: int | None = None) -> str:
+    async def get_available_random(
+        cls, db: AsyncSession, length: int | None = None
+    ) -> str:
         """生成一个未占用的随机短码"""
         for _ in range(50):  # 最多尝试 50 次
             code = cls.generate_random(length)
@@ -34,5 +36,7 @@ class ShortCodeService:
     @classmethod
     async def exists(cls, db: AsyncSession, short_code: str) -> bool:
         """检查短码是否已存在"""
-        result = await db.execute(select(ShortLink.id).where(ShortLink.short_code == short_code))
+        result = await db.execute(
+            select(ShortLink.id).where(ShortLink.short_code == short_code)
+        )
         return result.scalar_one_or_none() is not None

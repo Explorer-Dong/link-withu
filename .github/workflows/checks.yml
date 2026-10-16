@@ -1,0 +1,53 @@
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.3"
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+      - name: Install locked dependencies
+        run: |
+          uv sync --project api --frozen
+          npm ci --prefix web
+      - name: Backend lint and format
+        run: |
+          uv run --project api ruff check api
+          uv run --project api ruff format --check api
+      - name: Check frontend format
+        run: npm run format:check --prefix web
+      - name: Build frontend
+        run: npm run build --prefix web
+      - name: API, migration and recovery tests
+        run: uv run --project api pytest -q
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Desktop and mobile browser tests
+        run: npm run test:e2e --prefix web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: web/test-results/
+          retention-days: 7

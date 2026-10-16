@@ -1,13 +1,16 @@
 services:
   link-withu:
     image: xwithu/link-withu:latest
-    container_name: link-withu_latest
+    container_name: link-withu
     restart: unless-stopped
     ports:
       - "5201:5201"
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?请在 .env 中设置 ADMIN_PASSWORD}
       BASE_URL: ${BASE_URL:-http://localhost:5201}
+      APP_NAME: ${APP_NAME:-Link WithU}
+      RANDOM_CODE_LENGTH: ${RANDOM_CODE_LENGTH:-6}
       TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-0}
     volumes:
       - ./data:/proj/data

@@ -1,511 +1,394 @@
-<template>
-  <div class="home">
-    <section class="create-card">
-      <div class="section-title">
-        <p class="eyebrow">Create</p>
-        <h2>生成短链</h2>
-      </div>
-      <form @submit.prevent="onSubmit" class="form">
-        <div class="field">
-          <label for="url">原始链接</label>
-          <input
-            id="url"
-            v-model="form.originalUrl"
-            type="url"
-            placeholder="https://example.com/very-long-url"
-            required
-          />
-        </div>
-        <div class="field">
-          <label for="code">自定义短码（选填，不填则随机生成）</label>
-          <input
-            id="code"
-            v-model="form.shortCode"
-            type="text"
-            placeholder="my-link"
-            maxlength="32"
-          />
-        </div>
-        <button type="submit" class="btn primary" :disabled="loading">
-          {{ loading ? '生成中…' : '生成短链' }}
-        </button>
-        <p v-if="error" class="error">{{ error }}</p>
-        <div v-if="created" class="result">
-          <p class="result-label">短链已生成</p>
-          <div class="result-row">
-            <input readonly :value="created.short_url" class="result-input" ref="resultInput" />
-            <button type="button" class="btn secondary" @click="copyShortUrl">复制</button>
-          </div>
-        </div>
-      </form>
-    </section>
-
-    <section class="list-card">
-      <div class="list-head">
-        <div class="section-title">
-          <p class="eyebrow">Links</p>
-          <h2>短链列表</h2>
-        </div>
-        <div class="list-head-right">
-          <button type="button" class="btn secondary" @click="onAdminClick">
-            {{ adminSession ? '退出管理员' : '管理员登录' }}
-          </button>
-          <input
-            v-model="searchInput"
-            type="text"
-            class="search-input"
-            placeholder="搜索链接…"
-            @input="onSearchInput"
-          />
-          <button type="button" class="btn secondary" @click="loadList" :disabled="listLoading">刷新</button>
-        </div>
-      </div>
-      <div v-if="listLoading" class="loading">加载中…</div>
-      <div v-else-if="!list.items.length" class="empty">暂无短链，请先生成</div>
-      <ul v-else class="link-list">
-        <li v-for="item in list.items" :key="item.id" class="link-item">
-          <div class="link-main">
-            <span class="link-code">/r/{{ item.short_code }}</span>
-            <span class="link-url">{{ item.original_url }}</span>
-            <span class="link-meta">
-              访问 {{ item.visit_count }} 次 · {{ formatDate(item.created_at) }}
-            </span>
-          </div>
-          <div class="link-actions">
-            <button type="button" class="btn small" @click="copyItem(item)">复制</button>
-            <button type="button" class="btn small" @click="openEdit(item)">编辑</button>
-            <button type="button" class="btn small" @click="openStats(item)">统计</button>
-            <button type="button" class="btn small danger-btn" @click="onDelete(item)">删除</button>
-          </div>
-        </li>
-      </ul>
-
-      <div v-if="list.total > pageSize" class="pagination">
-        <button class="btn small" :disabled="page <= 1" @click="goPage(page - 1)">上一页</button>
-        <span class="page-info">{{ page }} / {{ totalPages }}</span>
-        <button class="btn small" :disabled="page >= totalPages" @click="goPage(page + 1)">下一页</button>
-      </div>
-    </section>
-
-    <Transition name="toast">
-      <div v-if="toast" class="toast">{{ toast }}</div>
-    </Transition>
-
-    <div v-if="editModal" class="modal-overlay" @click.self="closeEdit">
-      <div class="modal edit-modal">
-        <div class="modal-head">
-          <h3>修改短链 · /r/{{ editModal.short_code }}</h3>
-          <button type="button" class="modal-close" @click="closeEdit">×</button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="onSaveEdit" class="form">
-            <div class="field">
-              <label for="edit-short-code">短码（不可修改）</label>
-              <input id="edit-short-code" type="text" :value="editModal.short_code" readonly class="readonly-input" />
-            </div>
-            <div class="field">
-              <label for="edit-url">原始链接</label>
-              <input
-                id="edit-url"
-                v-model="editModal.original_url"
-                type="url"
-                placeholder="https://example.com/very-long-url"
-                required
-              />
-            </div>
-            <p v-if="editError" class="error">{{ editError }}</p>
-            <div class="edit-actions">
-              <button type="button" class="btn secondary" @click="closeEdit">取消</button>
-              <button type="submit" class="btn primary" :disabled="editSaving">
-                {{ editSaving ? '保存中…' : '保存' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="statsModal" class="modal-overlay" @click.self="statsModal = null">
-      <div class="modal">
-        <div class="modal-head">
-          <h3>访问统计 · {{ statsModal.short_code }}</h3>
-          <button type="button" class="modal-close" @click="statsModal = null">×</button>
-        </div>
-        <div class="modal-body">
-          <p class="stats-original">{{ statsModal.original_url }}</p>
-          <p class="stats-total">总访问：<strong>{{ statsModal.total_visits }}</strong> 次</p>
-          <div class="visits-table-wrap">
-            <table class="visits-table">
-              <thead>
-                <tr>
-                  <th>时间</th>
-                  <th>IP</th>
-                  <th>User-Agent</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(v, i) in statsModal.visits" :key="i">
-                  <td>{{ v.visited_at }}</td>
-                  <td>{{ v.ip || '-' }}</td>
-                  <td class="ua">{{ v.user_agent || '-' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { createLink, listLinks, updateLink, deleteLink, getStats, adminLogin } from '../api/links'
-
-const form = ref({ originalUrl: '', shortCode: '' })
-const loading = ref(false)
-const error = ref('')
-const created = ref(null)
-const resultInput = ref(null)
-
-const list = ref({ total: 0, items: [] })
-const listLoading = ref(false)
-const statsModal = ref(null)
-const editModal = ref(null)
-const editError = ref('')
-const editSaving = ref(false)
-
-const searchInput = ref('')
-const searchQuery = ref('')
-const pageSize = 20
-const page = ref(1)
-const toast = ref('')
-let toastTimer = null
-let debounceTimer = null
-const ADMIN_SESSION_KEY = 'link-withu-admin-session'
-
-const totalPages = computed(() => Math.max(1, Math.ceil(list.value.total / pageSize)))
-const adminSession = ref(loadAdminSession())
-
-function loadAdminSession() {
-  const raw = localStorage.getItem(ADMIN_SESSION_KEY)
-  if (!raw) return null
-
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import Icon from "../components/Icon.vue";
+import Modal from "../components/Modal.vue";
+import { createLink, listLinks, updateLink, deleteLink } from "../api/links";
+import { copy, formatDate, notify, number, tags } from "../state";
+const route = useRoute(),
+  router = useRouter();
+const items = ref([]),
+  total = ref(0),
+  page = ref(1),
+  q = ref(""),
+  sort = ref("newest"),
+  loading = ref(false),
+  error = ref(""),
+  saving = ref(false);
+const emptyForm = () => ({
+  original_url: "",
+  short_code: "",
+  title: "",
+  note: "",
+  tagText: "",
+});
+const form = reactive(emptyForm()),
+  edit = ref(null),
+  removing = ref(null),
+  created = ref(null),
+  expanded = ref(false);
+const activeTag = computed(() => route.query.tag || "");
+const pageSize = 10;
+const pages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
+let timer,
+  generation = 0;
+function body(value) {
+  return {
+    original_url: value.original_url,
+    title: value.title,
+    note: value.note,
+    tags: value.tagText
+      .split(/[,，]/)
+      .map((t) => t.trim())
+      .filter(Boolean),
+  };
+}
+async function load() {
+  const current = ++generation;
+  loading.value = true;
+  error.value = "";
   try {
-    const session = JSON.parse(raw)
-    if (!session.token || session.expiresAt <= Math.floor(Date.now() / 1000)) {
-      localStorage.removeItem(ADMIN_SESSION_KEY)
-      return null
+    const data = await listLinks({
+      skip: (page.value - 1) * pageSize,
+      limit: pageSize,
+      q: q.value,
+      sort: sort.value,
+      tag: activeTag.value,
+    });
+    if (current !== generation) return;
+    items.value = data.items;
+    total.value = data.total;
+    if (page.value > pages.value) {
+      page.value = pages.value;
+      return load();
     }
-    return session
-  } catch {
-    localStorage.removeItem(ADMIN_SESSION_KEY)
-    return null
-  }
-}
-
-function saveAdminSession(data) {
-  const session = { token: data.token, expiresAt: data.expires_at }
-  localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session))
-  adminSession.value = session
-}
-
-function clearAdminSession() {
-  localStorage.removeItem(ADMIN_SESSION_KEY)
-  adminSession.value = null
-}
-
-async function loginAdmin() {
-  const password = prompt('请输入管理员密码：')
-  if (password === null) return null
-  const data = await adminLogin(password)
-  saveAdminSession(data)
-  showToast('管理员登录成功，24 小时内无需重复输入密码')
-  return data.token
-}
-
-async function ensureAdminToken() {
-  adminSession.value = loadAdminSession()
-  if (adminSession.value) return adminSession.value.token
-  return loginAdmin()
-}
-
-async function onAdminClick() {
-  if (adminSession.value) {
-    clearAdminSession()
-    showToast('已退出管理员登录')
-    return
-  }
-
-  try {
-    await loginAdmin()
   } catch (e) {
-    showToast(e.message || '登录失败')
-  }
-}
-
-function showToast(msg) {
-  toast.value = msg
-  clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => { toast.value = '' }, 2000)
-}
-
-function onSearchInput() {
-  clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => {
-    searchQuery.value = searchInput.value.trim()
-    page.value = 1
-    loadList()
-  }, 350)
-}
-
-function goPage(p) {
-  page.value = p
-  loadList()
-}
-
-async function onSubmit() {
-  error.value = ''
-  created.value = null
-  loading.value = true
-  try {
-    const payload = {
-      original_url: form.value.originalUrl,
-    }
-    if (form.value.shortCode?.trim()) payload.short_code = form.value.shortCode.trim()
-    const data = await createLink(payload.original_url, payload.short_code || null)
-    created.value = data
-    form.value.originalUrl = ''
-    form.value.shortCode = ''
-    loadList()
-  } catch (e) {
-    error.value = e.message || '创建失败'
+    if (current === generation) error.value = e.message;
   } finally {
-    loading.value = false
+    if (current === generation) loading.value = false;
   }
 }
-
-function copyShortUrl() {
-  if (!created.value?.short_url || !resultInput.value) return
-  navigator.clipboard.writeText(created.value.short_url).then(() => {
-    showToast('已复制到剪贴板')
-  })
+function changed() {
+  window.dispatchEvent(new Event("links-changed"));
+  load();
 }
-
-function copyItem(item) {
-  navigator.clipboard.writeText(item.short_url).then(() => {
-    showToast('已复制到剪贴板')
-  })
-}
-
-function openEdit(item) {
-  editError.value = ''
-  editModal.value = { short_code: item.short_code, original_url: item.original_url }
-}
-
-function closeEdit() {
-  editModal.value = null
-  editError.value = ''
-}
-
-async function onSaveEdit() {
-  if (!editModal.value) return
-  editError.value = ''
-  editSaving.value = true
+async function create() {
+  saving.value = true;
   try {
-    const token = await ensureAdminToken()
-    if (!token) return
-    await updateLink(editModal.value.short_code, editModal.value.original_url.trim(), token)
-    showToast('已保存')
-    closeEdit()
-    loadList()
+    created.value = await createLink({
+      ...body(form),
+      short_code: form.short_code || null,
+    });
+    Object.assign(form, emptyForm());
+    expanded.value = false;
+    page.value = 1;
+    changed();
+    notify("短链已创建");
   } catch (e) {
-    if (e.message?.includes('过期') || e.message?.includes('无效') || e.message?.includes('登录')) clearAdminSession()
-    editError.value = e.message || '修改失败'
+    notify(e.message, true);
   } finally {
-    editSaving.value = false
+    saving.value = false;
   }
 }
-
-async function onDelete(item) {
-  if (!confirm(`确定删除短链 /r/${item.short_code} ？`)) return
+async function saveEdit() {
+  saving.value = true;
   try {
-    const token = await ensureAdminToken()
-    if (!token) return
-    await deleteLink(item.short_code, token)
-    showToast('已删除')
-    if (list.value.items.length === 1 && page.value > 1) page.value -= 1
-    loadList()
+    await updateLink(edit.value.short_code, body(edit.value));
+    edit.value = null;
+    changed();
+    notify("修改已保存");
   } catch (e) {
-    if (e.message?.includes('过期') || e.message?.includes('无效') || e.message?.includes('登录')) clearAdminSession()
-    showToast(e.message || '删除失败')
-  }
-}
-
-async function loadList() {
-  listLoading.value = true
-  try {
-    const skip = (page.value - 1) * pageSize
-    list.value = await listLinks(skip, pageSize, searchQuery.value)
-  } catch {
-    list.value = { total: 0, items: [] }
+    notify(e.message, true);
   } finally {
-    listLoading.value = false
+    saving.value = false;
   }
 }
-
-async function openStats(item) {
+async function remove() {
+  saving.value = true;
   try {
-    const token = await ensureAdminToken()
-    if (!token) return
-    statsModal.value = await getStats(item.short_code, token)
+    await deleteLink(removing.value.short_code);
+    removing.value = null;
+    changed();
+    notify("短链已删除");
   } catch (e) {
-    if (e.message?.includes('过期') || e.message?.includes('无效') || e.message?.includes('登录')) clearAdminSession()
-    showToast(e.message || '获取统计失败')
-    statsModal.value = null
+    notify(e.message, true);
+  } finally {
+    saving.value = false;
   }
 }
-
-function formatDate(iso) {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  return d.toLocaleString('zh-CN')
-}
-
-onMounted(() => loadList())
+watch(q, () => {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    page.value = 1;
+    load();
+  }, 300);
+});
+watch([sort, activeTag], () => {
+  page.value = 1;
+  load();
+});
+onMounted(load);
 onUnmounted(() => {
-  clearTimeout(debounceTimer)
-  clearTimeout(toastTimer)
-})
+  clearTimeout(timer);
+  generation++;
+});
 </script>
-
-<style scoped>
-  .home {
-    display: grid;
-    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-    gap: 1rem;
-    align-items: start;
-  }
-  .create-card, .list-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    box-shadow: var(--shadow);
-  }
-  .create-card { padding: 1.2rem; }
-  .list-card { padding: 1.2rem; }
-  .section-title { margin-bottom: 1rem; }
-  .eyebrow {
-    margin: 0 0 0.25rem;
-    color: var(--accent);
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  .create-card h2, .list-card h2 { margin: 0; font-size: 1.05rem; color: var(--text); }
-  .form .field { margin-bottom: 1rem; }
-  .form label { display: block; margin-bottom: 0.4rem; color: var(--text); font-size: 0.86rem; font-weight: 600; }
-  .form input[type="url"], .form input[type="text"] {
-    width: 100%;
-    padding: 0.62rem 0.72rem;
-    background: var(--surface-soft);
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    color: var(--text);
-    font-size: 0.95rem;
-    height: 38px;
-  }
-  .form input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-  .btn {
-    padding: 0.5rem 0.85rem;
-    border-radius: 7px;
-    border: 1px solid transparent;
-    cursor: pointer;
-    font-size: 0.9rem;
-    font-weight: 600;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-    height: 38px; /* 和 input 的默认高度保持一致 */
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .btn.primary { background: var(--accent); color: #1b120b; border-color: var(--accent); }
-  .btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
-  .btn.primary:disabled { opacity: 0.6; cursor: not-allowed; }
-  .btn.secondary, .btn.small { background: var(--control-bg); color: var(--text); border-color: var(--border); }
-  .btn.secondary:hover:not(:disabled), .btn.small:hover:not(:disabled) { background: var(--control-hover); border-color: var(--accent); }
-  .btn.small { padding: 0.36rem 0.62rem; font-size: 0.82rem; height: 38px; }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .danger-btn { background: var(--danger-bg); color: var(--danger); }
-  .danger-btn:hover:not(:disabled) { background: var(--danger-hover); border-color: var(--danger); color: var(--danger); }
-  .error { color: var(--danger); margin-top: 0.7rem; font-size: 0.9rem; }
-  .result { margin-top: 1rem; padding: 0.9rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); }
-  .result-label { margin: 0 0 0.5rem; color: var(--muted); font-size: 0.86rem; }
-  .result-row { display: flex; gap: 0.5rem; align-items: center; }
-  .result-input { flex: 1; min-width: 0; padding: 0.52rem; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; color: var(--accent); font-size: 0.88rem; height: 38px; }
-  .list-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap: 0.75rem; flex-wrap: wrap; }
-  .list-head-right { display: flex; gap: 0.5rem; align-items: center; }
-  .search-input {
-    padding: 0.48rem 0.7rem;
-    background: var(--surface-soft);
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    color: var(--text);
-    font-size: 0.9rem;
-    width: 190px;
-    height: 38px;
-  }
-  .search-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-  .link-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
-  .link-item {
-    display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;
-    padding: 0.9rem 0; border-bottom: 1px solid var(--border);
-  }
-  .link-item:last-child { border-bottom: none; }
-  .link-main { flex: 1; min-width: 0; }
-  .link-code { display: inline-block; color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; margin-right: 0.5rem; }
-  .link-url { color: var(--text); font-size: 0.9rem; word-break: break-all; }
-  .link-meta { display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.8rem; }
-  .link-actions { display: flex; gap: 0.45rem; flex-shrink: 0; }
-  .loading, .empty { color: var(--muted); padding: 1.1rem 0; text-align: center; border-top: 1px solid var(--border); }
-  .pagination {
-    display: flex; align-items: center; justify-content: center; gap: 1rem;
-    padding-top: 1rem; margin-top: 0.5rem; border-top: 1px solid var(--border);
-  }
-  .page-info { color: var(--muted); font-size: 0.9rem; }
-  .toast {
-    position: fixed; top: 5rem; right: 1rem;
-    background: var(--surface); color: var(--text); padding: 0.65rem 1.15rem;
-    border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; z-index: 200; box-shadow: var(--shadow);
-  }
-  .toast-enter-active, .toast-leave-active { transition: opacity 0.25s, transform 0.25s; }
-  .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(10px) translateY(0); }
-  .modal-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.58); display: flex; align-items: center; justify-content: center;
-    z-index: 100; padding: 1rem;
-  }
-  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; max-width: 720px; width: 100%; max-height: 85vh; display: flex; flex-direction: column; box-shadow: var(--shadow); }
-  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.2rem; border-bottom: 1px solid var(--border); }
-  .modal-head h3 { margin: 0; font-size: 1rem; }
-  .modal-close { background: var(--control-bg); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 1.2rem; cursor: pointer; line-height: 1; }
-  .modal-body { padding: 1.2rem; overflow: auto; }
-  .edit-modal { max-width: 520px; }
-  .readonly-input { opacity: 0.7; cursor: not-allowed; }
-  .edit-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
-  .stats-original { color: var(--muted); font-size: 0.9rem; word-break: break-all; margin: 0 0 0.5rem; }
-  .stats-total { margin: 0 0 1rem; }
-  .visits-table-wrap { overflow-x: auto; }
-  .visits-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  .visits-table th, .visits-table td { padding: 0.55rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
-  .visits-table th { color: var(--muted); font-weight: 700; }
-  .visits-table .ua { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-  @media (max-width: 820px) {
-    .home { grid-template-columns: 1fr; }
-    .list-head-right { width: 100%; }
-    .search-input { flex: 1; width: auto; }
-    .link-item { flex-direction: column; }
-    .link-actions { flex-wrap: wrap; }
-  }
-</style>
+<template>
+  <div class="page-heading">
+    <div><h1>链接管理</h1></div>
+  </div>
+  <section class="card composer">
+    <div class="section-heading">
+      <h2><Icon name="plus" :size="18" />创建短链</h2>
+      <button type="button" class="text-btn" @click="expanded = !expanded">
+        {{ expanded ? "收起选项" : "更多选项"
+        }}<Icon :name="expanded ? 'chevron-up' : 'chevron-down'" :size="16" />
+      </button>
+    </div>
+    <form @submit.prevent="create">
+      <div class="url-create">
+        <label class="sr-only" for="new-url">目标链接</label>
+        <div class="input-with-icon">
+          <Icon name="link" :size="18" /><input
+            id="new-url"
+            v-model="form.original_url"
+            placeholder="粘贴你的长链接，例如 https://example.com/article"
+            required
+            maxlength="2048"
+          />
+        </div>
+        <button class="btn primary" :disabled="saving">
+          <Icon name="plus" :size="17" />{{ saving ? "创建中…" : "创建短链" }}
+        </button>
+      </div>
+      <div v-if="expanded" class="form-grid optional-fields">
+        <label
+          >链接名称<input
+            v-model="form.title"
+            placeholder="给链接起个名字"
+            maxlength="120" /></label
+        ><label
+          >自定义短码<input
+            v-model="form.short_code"
+            placeholder="留空自动生成"
+            pattern="[A-Za-z0-9_-]{1,32}"
+            maxlength="32" /></label
+        ><label
+          >标签<input
+            v-model="form.tagText"
+            placeholder="博客, 公众号, 活动" /></label
+        ><label
+          >备注<input
+            v-model="form.note"
+            placeholder="记录链接的用途"
+            maxlength="2000"
+        /></label>
+      </div>
+    </form>
+    <div v-if="created" class="created-result">
+      <span
+        ><span class="status-dot"></span>已创建
+        <a :href="created.short_url" target="_blank" rel="noreferrer">{{
+          created.short_url
+        }}</a></span
+      ><button class="text-btn" @click="copy(created.short_url)">
+        <Icon name="copy" :size="15" />复制链接
+      </button>
+    </div>
+  </section>
+  <section class="links-section">
+    <div class="list-toolbar">
+      <div class="toolbar-title">
+        <h2>{{ activeTag ? "# " + activeTag : "全部链接" }}</h2>
+        <button
+          v-if="activeTag"
+          class="text-btn muted"
+          @click="router.push('/links')"
+        >
+          清除筛选 <Icon name="close" :size="16" />
+        </button>
+      </div>
+      <div class="filters">
+        <div class="input-with-icon search-field">
+          <Icon name="search" :size="17" /><input
+            v-model="q"
+            aria-label="搜索链接"
+            placeholder="搜索名称、链接或标签…"
+            maxlength="200"
+          />
+        </div>
+        <select
+          :value="activeTag"
+          aria-label="筛选标签"
+          @change="
+            router.push({
+              path: '/links',
+              query: { tag: $event.target.value || undefined },
+            })
+          "
+        >
+          <option value="">全部标签</option>
+          <option v-for="tag in tags" :key="tag.name" :value="tag.name">
+            # {{ tag.name }}
+          </option>
+        </select>
+        <select v-model="sort" aria-label="排序方式">
+          <option value="newest">最新创建</option>
+          <option value="oldest">最早创建</option>
+          <option value="visits">访问最多</option>
+        </select>
+      </div>
+    </div>
+    <p v-if="error" class="error-message" role="alert">
+      {{ error }} <button class="text-btn" @click="load">重试</button>
+    </p>
+    <div v-if="loading" class="loading-state" aria-live="polite">
+      正在加载链接…
+    </div>
+    <div v-else-if="!items.length && !error" class="empty-state card">
+      <span class="empty-icon"><Icon name="link" :size="28" /></span>
+      <h3>
+        {{ q || activeTag ? "没有找到匹配的链接" : "从你的第一个链接开始" }}
+      </h3>
+    </div>
+    <div v-else class="link-list">
+      <article v-for="item in items" :key="item.id" class="card link-card">
+        <div class="link-card-icon"><Icon name="link" :size="22" /></div>
+        <div class="link-content">
+          <div class="link-title-row">
+            <h3>{{ item.title || item.short_code }}</h3>
+            <span v-if="item.is_custom" class="tiny-badge">自定义</span>
+          </div>
+          <a
+            class="short-link"
+            :href="item.short_url"
+            target="_blank"
+            rel="noreferrer"
+            >{{ item.short_url }}<Icon name="arrow" :size="13"
+          /></a>
+          <p class="original-url" :title="item.original_url">
+            {{ item.original_url }}
+          </p>
+          <p v-if="item.note" class="link-note">{{ item.note }}</p>
+          <div class="link-meta">
+            <button
+              v-for="tag in item.tags"
+              :key="tag"
+              class="tag-pill"
+              @click="router.push({ path: '/links', query: { tag } })"
+            >
+              # {{ tag }}</button
+            ><span>{{ formatDate(item.created_at) }}</span>
+          </div>
+        </div>
+        <div class="link-right">
+          <router-link
+            :aria-label="`访问统计：${item.short_code}`"
+            class="visit-pill"
+            :to="{ path: '/', query: { short_code: item.short_code } }"
+            ><Icon name="chart" :size="16" /><strong>{{
+              number(item.visit_count)
+            }}</strong
+            ><span>次访问</span></router-link
+          >
+          <div class="link-actions">
+            <button
+              class="icon-btn"
+              aria-label="复制短链"
+              title="复制短链"
+              @click="copy(item.short_url)"
+            >
+              <Icon name="copy" :size="17" /></button
+            ><button
+              class="icon-btn"
+              aria-label="编辑短链"
+              title="编辑短链"
+              @click="edit = { ...item, tagText: item.tags.join(', ') }"
+            >
+              <Icon name="edit" :size="17" /></button
+            ><button
+              class="icon-btn danger-text"
+              aria-label="删除短链"
+              title="删除短链"
+              @click="removing = item"
+            >
+              <Icon name="trash" :size="17" />
+            </button>
+          </div>
+        </div>
+      </article>
+    </div>
+    <div v-if="total > pageSize" class="pagination" aria-label="链接分页">
+      <span>共 {{ number(total) }} 条 · 第 {{ page }} / {{ pages }} 页</span>
+      <div>
+        <button
+          class="btn"
+          :disabled="page === 1 || loading"
+          @click="
+            page--;
+            load();
+          "
+        >
+          上一页</button
+        ><button
+          class="btn"
+          :disabled="page >= pages || loading"
+          @click="
+            page++;
+            load();
+          "
+        >
+          下一页
+        </button>
+      </div>
+    </div>
+  </section>
+  <Modal v-if="edit" title="编辑短链" @close="!saving && (edit = null)"
+    ><form class="stack-form" @submit.prevent="saveEdit">
+      <p class="muted small">
+        短码 {{ edit.short_code }} 保持不变，已有分享继续有效。
+      </p>
+      <label
+        >目标链接<input
+          v-model="edit.original_url"
+          required
+          maxlength="2048" /></label
+      ><label>链接名称<input v-model="edit.title" maxlength="120" /></label
+      ><label
+        >标签<input
+          v-model="edit.tagText"
+          placeholder="多个标签用逗号分隔" /></label
+      ><label
+        >备注<textarea v-model="edit.note" rows="3" maxlength="2000"></textarea>
+      </label>
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn"
+          :disabled="saving"
+          @click="edit = null"
+        >
+          取消</button
+        ><button class="btn primary" :disabled="saving">
+          {{ saving ? "保存中…" : "保存修改" }}
+        </button>
+      </div>
+    </form></Modal
+  >
+  <Modal
+    v-if="removing"
+    title="删除这个短链？"
+    @close="!saving && (removing = null)"
+    ><p class="muted">
+      {{ removing.title || removing.short_code }}
+      的访问记录也会被删除，此操作无法撤销。
+    </p>
+    <div class="modal-actions">
+      <button class="btn" :disabled="saving" @click="removing = null">
+        取消</button
+      ><button class="btn danger" :disabled="saving" @click="remove">
+        {{ saving ? "删除中…" : "确认删除" }}
+      </button>
+    </div></Modal
+  >
+</template>

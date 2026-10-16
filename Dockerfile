@@ -1,21 +1,30 @@
-# build web frontend
-FROM node:24-alpine AS web
+# syntax=docker/dockerfile:1
+FROM --platform=$BUILDPLATFORM node:24-alpine AS web
 WORKDIR /proj/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
 COPY web/ ./
-RUN npm i
 RUN npm run build
 
-# run api backend
-FROM python:3.13-alpine
+FROM python:3.13-slim
+COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /bin/uv
 WORKDIR /proj/api
-ENV PYTHONUNBUFFERED=1
-ENV FRONTEND_DIST=/proj/web/dist
-ENV DATABASE_URL=sqlite+aiosqlite:////proj/data/short_links.db
-RUN mkdir -p /proj/data
-COPY --from=web /proj/web/dist ../web/dist
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-COPY api/ ./
+ENV PYTHONUNBUFFERED=1 \
+    TZ=Asia/Shanghai \
+    UV_LINK_MODE=copy \
+    FRONTEND_DIST=/proj/web/dist \
+    DATABASE_URL=sqlite+aiosqlite:////proj/data/short_links.db
+COPY api/pyproject.toml api/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --no-install-project --no-editable --locked
+    uv sync --frozen --no-dev --no-install-project
+COPY api/app ./app
+COPY --from=web /proj/web/dist /proj/web/dist
+RUN mkdir -p /proj/data
+LABEL org.opencontainers.image.title="Link WithU" \
+      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.source="https://github.com/Explorer-Dong/link-withu" \
+      org.opencontainers.image.licenses="MIT"
 EXPOSE 5201
-CMD ["uv", "run", "fastapi", "run", "app/main.py", "--port", "5201"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["/proj/api/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5201/api/health', timeout=3)"]
+CMD ["/proj/api/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5201", "--no-proxy-headers"]

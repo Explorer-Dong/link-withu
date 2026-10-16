@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>
-    一款简约的短链管理器
+    轻量、自部署的短链管理与访问统计工具
   </strong>
 </p>
 
@@ -18,14 +18,6 @@
   <a href="./docs/user-manual.md"><strong>用户手册</strong></a>
   &middot;
   <a href="./docs/dev-manual.md"><strong>参与贡献</strong></a>
-</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/link-withu-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset=".github/assets/link-withu.png">
-    <img alt="Link WithU" src=".github/assets/link-withu.png">
-  </picture>
 </p>
 
 ## 快速开始
@@ -57,6 +49,66 @@ docker compose up -d
 ```
 
 阅读 [用户手册](./docs/user-manual.md) 作进一步了解。
+
+## 界面截图
+
+### 桌面端
+
+<div align="center">
+<table>
+<tr>
+<td align="center"><b>访问统计</b></td>
+<td align="center"><b>链接管理</b></td>
+<td align="center"><b>设置</b></td>
+</tr>
+<tr>
+<td><picture>
+<source media="(prefers-color-scheme: dark)" srcset=".github/assets/analytics-dark.png">
+<source media="(prefers-color-scheme: light)" srcset=".github/assets/analytics.png">
+<img src=".github/assets/analytics.png" alt="访问统计" width="400">
+</picture></td>
+<td><picture>
+<source media="(prefers-color-scheme: dark)" srcset=".github/assets/link-withu-dark.png">
+<source media="(prefers-color-scheme: light)" srcset=".github/assets/link-withu.png">
+<img src=".github/assets/link-withu.png" alt="链接管理" width="400">
+</picture></td>
+<td><picture>
+<source media="(prefers-color-scheme: dark)" srcset=".github/assets/settings-dark.png">
+<source media="(prefers-color-scheme: light)" srcset=".github/assets/settings.png">
+<img src=".github/assets/settings.png" alt="设置" width="400">
+</picture></td>
+</tr>
+</table>
+</div>
+
+### 手机端
+
+<div align="center">
+<table>
+<tr>
+<td align="center"><b>访问统计</b></td>
+<td align="center"><b>链接管理</b></td>
+<td align="center"><b>设置</b></td>
+</tr>
+<tr>
+<td><picture>
+<source media="(prefers-color-scheme: dark)" srcset=".github/assets/analytics-mobile-dark.png">
+<source media="(prefers-color-scheme: light)" srcset=".github/assets/analytics-mobile.png">
+<img src=".github/assets/analytics-mobile.png" alt="手机端访问统计" width="180">
+</picture></td>
+<td><picture>
+<source media="(prefers-color-scheme: dark)" srcset=".github/assets/links-mobile-dark.png">
+<source media="(prefers-color-scheme: light)" srcset=".github/assets/links-mobile.png">
+<img src=".github/assets/links-mobile.png" alt="手机端链接管理" width="180">
+</picture></td>
+<td><picture>
+<source media="(prefers-color-scheme: dark)" srcset=".github/assets/settings-mobile-dark.png">
+<source media="(prefers-color-scheme: light)" srcset=".github/assets/settings-mobile.png">
+<img src=".github/assets/settings-mobile.png" alt="手机端设置" width="180">
+</picture></td>
+</tr>
+</table>
+</div>
 
 ## 参与贡献
 

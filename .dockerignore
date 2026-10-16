@@ -10,3 +10,9 @@ web/dist
 /**/.env
 LICENSE
 *.md
+
+web/test-results
+web/playwright-report
+api/tests
+api/.pytest_cache
+api/.ruff_cache
