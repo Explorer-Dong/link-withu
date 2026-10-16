@@ -44,6 +44,7 @@ jobs:
           assert os.environ.get('DOCKERHUB_USERNAME'), 'Configure DOCKERHUB_USERNAME in Actions secrets'
           assert os.environ.get('DOCKERHUB_TOKEN'), 'Configure DOCKERHUB_TOKEN in Actions secrets'
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'tag={tag}\n')
               f.write(f'version={version}\n')
           PY
       - uses: docker/setup-qemu-action@v4
@@ -75,7 +76,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            xwithu/link-withu:${{ steps.version.outputs.version }}
+            xwithu/link-withu:${{ steps.version.outputs.tag }}
             xwithu/link-withu:latest
           labels: org.opencontainers.image.version=${{ steps.version.outputs.version }}
           cache-from: type=gha
@@ -83,11 +84,11 @@ jobs:
           provenance: mode=min
       - name: Verify both architectures and latest tag
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           docker buildx imagetools inspect "$IMAGE@$DIGEST" --raw > /tmp/build-manifest.json
-          docker buildx imagetools inspect "$IMAGE:$VERSION" --raw > /tmp/version-manifest.json
+          docker buildx imagetools inspect "$IMAGE:$TAG" --raw > /tmp/version-manifest.json
           docker buildx imagetools inspect "$IMAGE:latest" --raw > /tmp/latest-manifest.json
           python3 - <<'PY'
           import json
