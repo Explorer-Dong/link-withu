@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>
-    轻量、自部署的短链管理与访问统计工具
+    一款简约的短链管理器
   </strong>
 </p>
 

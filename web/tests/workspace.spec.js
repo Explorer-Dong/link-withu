@@ -227,6 +227,7 @@ test("ten links per page, filter resets and deleting the last page", async ({
     { length: 11 },
     (_, i) => `${prefix}-${String(i).padStart(2, "0")}`,
   );
+  await page.clock.install();
   try {
     for (const [index, code] of codes.entries()) {
       const response = await request.post("/api/links", {
@@ -241,6 +242,8 @@ test("ten links per page, filter resets and deleting the last page", async ({
     }
     await login(page);
     await page.goto("/links");
+    await expect(page.getByRole("article")).toHaveCount(10);
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
     await page.getByRole("textbox", { name: "搜索链接" }).fill(prefix);
     await page
       .getByRole("combobox", { name: "排序方式" })
@@ -268,6 +271,11 @@ test("ten links per page, filter resets and deleting the last page", async ({
     await expect(page.getByRole("article").first()).toContainText(codes[10]);
     await pagination.getByRole("button", { name: "下一页" }).click();
     await expect(page.getByRole("article")).toHaveCount(1);
+    // Let the original search debounce expire after sorting and changing pages.
+    await page.clock.runFor(300);
+    await expect(pagination).toContainText("第 2 / 2 页");
+    await expect(page.getByRole("article")).toHaveCount(1);
+    await page.clock.resume();
     await page.getByRole("textbox", { name: "搜索链接" }).fill(codes[5]);
     await expect(page.getByRole("article")).toHaveCount(1);
     await expect(page.getByRole("article")).toContainText(codes[5]);

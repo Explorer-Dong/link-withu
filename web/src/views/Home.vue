@@ -44,6 +44,8 @@ function body(value) {
   };
 }
 async function load() {
+  // An immediate refresh supersedes any pending debounced search.
+  clearTimeout(timer);
   const current = ++generation;
   loading.value = true;
   error.value = "";
