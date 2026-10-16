@@ -48,6 +48,21 @@ jobs:
           PY
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
+      - name: Build and smoke test both architectures before publishing
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          for arch in amd64 arm64; do
+            local_image="link-withu-smoke:$VERSION-$arch"
+            docker buildx build --platform "linux/$arch" --load \
+              --label "org.opencontainers.image.version=$VERSION" \
+              --tag "$local_image" .
+            docker run --rm -i --platform "linux/$arch" \
+              --entrypoint /proj/api/.venv/bin/python \
+              -e ADMIN_PASSWORD=ci-smoke-test-only \
+              -e EXPECTED_VERSION="$VERSION" \
+              "$local_image" - < .github/scripts/smoke.py
+          done
       - uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -62,6 +77,7 @@ jobs:
           tags: |
             xwithu/link-withu:${{ steps.version.outputs.version }}
             xwithu/link-withu:latest
+          labels: org.opencontainers.image.version=${{ steps.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=min
@@ -70,6 +86,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --raw > /tmp/build-manifest.json
           docker buildx imagetools inspect "$IMAGE:$VERSION" --raw > /tmp/version-manifest.json
           docker buildx imagetools inspect "$IMAGE:latest" --raw > /tmp/latest-manifest.json
           python3 - <<'PY'
@@ -77,36 +94,22 @@ jobs:
           from pathlib import Path
           version = Path('/tmp/version-manifest.json').read_bytes()
           latest = Path('/tmp/latest-manifest.json').read_bytes()
-          assert version == latest, 'latest must reference the same manifest as the version tag'
+          built = Path('/tmp/build-manifest.json').read_bytes()
+          assert json.loads(built) == json.loads(version) == json.loads(latest), 'Version and latest must reference the tested build'
           manifest = json.loads(version)
           platforms = {(m['platform']['os'], m['platform']['architecture']) for m in manifest['manifests']}
           assert {('linux', 'amd64'), ('linux', 'arm64')} <= platforms, platforms
           PY
-      - name: Smoke test published images on both architectures
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          for arch in amd64 arm64; do
-            docker run --rm --platform "linux/$arch" \
-              --entrypoint /proj/api/.venv/bin/python \
-              -e ADMIN_PASSWORD=ci-smoke-test-only \
-              "$IMAGE:$VERSION" -c '
-          import asyncio
-          from pathlib import Path
-          from app.database import init_db
-          from app.main import app
-          asyncio.run(init_db())
-          assert Path("/proj/web/dist/index.html").is_file()
-          assert app.version == "1.0.0"
-          print("Application import, SQLite initialization and frontend assets OK")
-          '
-          done
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --verify-tag \
-            --title "Link WithU $VERSION" \
-            --generate-notes
+          if gh release view "$GITHUB_REF_NAME" --json tagName > /dev/null 2>&1; then
+            echo "Release already exists; preserving its title and notes."
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --title "v$VERSION" \
+              --notes ""
+          fi

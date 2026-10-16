@@ -32,8 +32,10 @@ jobs:
           npm ci --prefix web
       - name: Backend lint and format
         run: |
-          uv run --project api ruff check api
-          uv run --project api ruff format --check api
+          uv run --project api ruff check api .github/scripts
+          uv run --project api ruff format --check api .github/scripts
+      - name: Python type checking
+        run: uv run --project api ty check --project api api .github/scripts --error-on-warning
       - name: Check frontend format
         run: npm run format:check --prefix web
       - name: Build frontend

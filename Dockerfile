@@ -21,7 +21,6 @@ COPY api/app ./app
 COPY --from=web /proj/web/dist /proj/web/dist
 RUN mkdir -p /proj/data
 LABEL org.opencontainers.image.title="Link WithU" \
-      org.opencontainers.image.version="1.0.0" \
       org.opencontainers.image.source="https://github.com/Explorer-Dong/link-withu" \
       org.opencontainers.image.licenses="MIT"
 EXPOSE 5201
