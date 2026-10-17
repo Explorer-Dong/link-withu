@@ -2,38 +2,44 @@
 import { onMounted, onUnmounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import Icon from "./components/Icon.vue";
-import { api } from "./api/links";
-import { theme, applyTheme, session, site, tags, toast } from "./state";
+import { api, refreshTags } from "./api/links";
+import { theme, applyTheme, session, site, toast } from "./state";
 import "./style.css";
 const route = useRoute();
+watch(
+  [() => route.meta.title, () => site.value.app_name],
+  ([pageTitle, siteName]) => {
+    document.title = pageTitle ? `${pageTitle} · ${siteName}` : siteName;
+  },
+  { immediate: true },
+);
 const media = matchMedia("(prefers-color-scheme: dark)");
-const refreshTags = async () => {
-  const token = session.value?.token;
-  if (token)
-    try {
-      const result = await api("/api/links/tags");
-      if (session.value?.token === token) tags.value = result;
-    } catch {
-      /* views show request failures */
-    }
+const updateTags = async () => {
+  try {
+    await refreshTags();
+  } catch {
+    /* views show request failures */
+  }
 };
 onMounted(async () => {
   applyTheme();
   media.addEventListener("change", applyTheme);
-  window.addEventListener("links-changed", refreshTags);
+  window.addEventListener("links-changed", updateTags);
   try {
-    site.value = await api("/api/site");
+    const previous = site.value;
+    const result = await api("/api/site");
+    if (site.value === previous) site.value = result;
   } catch {
     /* default branding */
   }
-  refreshTags();
+  updateTags();
 });
 onUnmounted(() => {
   media.removeEventListener("change", applyTheme);
-  window.removeEventListener("links-changed", refreshTags);
+  window.removeEventListener("links-changed", updateTags);
 });
 watch(theme, applyTheme);
-watch(session, refreshTags);
+watch(session, updateTags);
 </script>
 <template>
   <div v-if="route.path === '/login'" class="login-shell"><router-view /></div>

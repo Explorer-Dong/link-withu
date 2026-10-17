@@ -1,9 +1,10 @@
 services:
   api:
-    image: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+    build:
+      context: .
+      target: dev
     container_name: link-withu-local-api
     working_dir: /proj/api
-    command: sh -c "uv sync --frozen && uv run uvicorn app.main:app --host 0.0.0.0 --port 5201 --reload --no-proxy-headers"
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
@@ -11,12 +12,13 @@ services:
       APP_NAME: ${APP_NAME:-Link WithU}
       RANDOM_CODE_LENGTH: ${RANDOM_CODE_LENGTH:-6}
       TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-0}
-      DATABASE_URL: sqlite+aiosqlite:////proj/api/short_links.db
+      DATABASE_URL: sqlite:////proj/api/short_links.db
     ports:
       - "5201:5201"
     volumes:
       - ./api:/proj/api
-      - api-venv:/proj/api/.venv
+      - api-target:/proj/api/target
+      - cargo-registry:/usr/local/cargo/registry
 
   web:
     image: node:24-alpine
@@ -32,5 +34,6 @@ services:
       - web-node-modules:/proj/web/node_modules
 
 volumes:
-  api-venv:
+  api-target:
+  cargo-registry:
   web-node-modules:

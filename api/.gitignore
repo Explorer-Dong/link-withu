@@ -1,7 +1,6 @@
-.venv
-short_links.db
-short_links.db-*
-/**/__pycache__
-
+/target/
+/.venv/
+/short_links.db*
+**/__pycache__/
 .pytest_cache/
 .ruff_cache/

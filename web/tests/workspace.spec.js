@@ -1,48 +1,9 @@
-import { test, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
-test.beforeEach(async ({ request }) => {
-  const response = await request.post("/api/admin/login", {
-    data: { password: "browser-test-only" },
-  });
-  expect(response.ok()).toBe(true);
-  const { token } = await response.json();
-  const reset = await request.post("/api/admin/restore", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "X-Confirm-Restore": "RESTORE",
-    },
-    data: {
-      format: "link-withu-backup",
-      version: 1,
-      exported_at: new Date().toISOString(),
-      settings: {
-        app_name: "Link WithU",
-        base_url: "http://127.0.0.1:5202",
-        random_code_length: 6,
-      },
-      links: [],
-      visits: [],
-    },
-  });
-  expect(reset.ok()).toBe(true);
-});
+import { test, resetData, login, assertNoOverflow } from "./helpers";
 
-async function login(page) {
-  await page.goto("/login");
-  await page
-    .getByLabel("管理员密码", { exact: true })
-    .fill("browser-test-only");
-  await page.getByRole("button", { name: "登录工作空间" }).click();
-  await expect(page).toHaveURL(/\/$/);
-}
-async function assertNoOverflow(page) {
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-}
+test.beforeEach(resetData);
 
 test("independent login, protected deep links, themes and logout", async ({
   page,
@@ -142,6 +103,9 @@ test("create, search, tag, edit, analytics, bot filter and delete", async ({
   await card.getByRole("button", { name: "# 已更新" }).click();
   await expect(page).toHaveURL(/tag=/);
   await expect(card).toBeVisible();
+  await page.getByRole("button", { name: "清除筛选" }).click();
+  await expect(page).toHaveURL("/links");
+  await expect(card).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("links.png"),
     fullPage: true,
@@ -211,10 +175,12 @@ test("settings save, full data export and validated restore", async ({
   await expect(page.getByLabel("统计时区", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "保存设置" }).click();
   await expect(page.getByRole("status")).toContainText("设置已保存");
+  await expect(page).toHaveTitle("设置 · 我的短链空间");
   await page.reload();
   await expect(page.getByLabel("站点名称", { exact: true })).toHaveValue(
     "我的短链空间",
   );
+  await expect(page).toHaveTitle("设置 · 我的短链空间");
   const pending = page.waitForEvent("download");
   await page.getByRole("button", { name: "导出全部数据", exact: true }).click();
   const backup = await pending;
@@ -224,6 +190,7 @@ test("settings save, full data export and validated restore", async ({
   await page.getByLabel("站点名称", { exact: true }).fill("临时改名");
   await page.getByRole("button", { name: "保存设置" }).click();
   await expect(page.getByRole("status")).toContainText("设置已保存");
+  await expect(page).toHaveTitle("设置 · 临时改名");
   await page.getByLabel("选择备份文件").setInputFiles(backupPath);
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByRole("button", { name: "覆盖并恢复" })).toBeDisabled();
@@ -233,11 +200,29 @@ test("settings save, full data export and validated restore", async ({
   await expect(page.getByLabel("站点名称", { exact: true })).toHaveValue(
     "我的短链空间",
   );
+  await expect(page).toHaveTitle("设置 · 我的短链空间");
   await page.screenshot({
     path: testInfo.outputPath("settings.png"),
     fullPage: true,
   });
   await assertNoOverflow(page);
+  await page
+    .getByRole("navigation", { name: "主导航" })
+    .getByRole("link", { name: "链接管理" })
+    .click();
+  await expect(page).toHaveTitle("链接管理 · 我的短链空间");
+  await page.reload();
+  await expect(page).toHaveTitle("链接管理 · 我的短链空间");
+  await page
+    .getByRole("navigation", { name: "主导航" })
+    .getByRole("link", { name: "设置" })
+    .click();
+  await page.getByRole("button", { name: "退出登录" }).click();
+  await expect(page).toHaveTitle("登录 · 我的短链空间");
+  await expect(page.locator(".login-brand")).toHaveText("我的短链空间");
+  await page.reload();
+  await expect(page).toHaveTitle("登录 · 我的短链空间");
+  await expect(page.locator(".login-brand")).toHaveText("我的短链空间");
 });
 
 test("ten links per page, filter resets and deleting the last page", async ({
@@ -295,6 +280,17 @@ test("ten links per page, filter resets and deleting the last page", async ({
       .selectOption("newest");
     await expect(pagination).toContainText("第 1 / 2 页");
     await expect(page.getByRole("article")).toHaveCount(10);
+    await expect(page.getByRole("article").first()).toContainText(codes[10]);
+    expect(
+      (await request.get(`/r/${codes[3]}`, { maxRedirects: 0 })).status(),
+    ).toBe(302);
+    await page
+      .getByRole("combobox", { name: "排序方式" })
+      .selectOption("visits");
+    await expect(page.getByRole("article").first()).toContainText(codes[3]);
+    await page
+      .getByRole("combobox", { name: "排序方式" })
+      .selectOption("newest");
     await expect(page.getByRole("article").first()).toContainText(codes[10]);
     await pagination.getByRole("button", { name: "下一页" }).click();
     await expect(page.getByRole("article")).toHaveCount(1);

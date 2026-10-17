@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import Icon from "../components/Icon.vue";
 import TrendChart from "../components/TrendChart.vue";
 import Breakdown from "../components/Breakdown.vue";
-import { api, getStats } from "../api/links";
+import { api, getStats, refreshTags } from "../api/links";
 import { tags, number, formatDate } from "../state";
 const route = useRoute(),
   router = useRouter();
@@ -71,13 +71,12 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [result, availableTags] = await Promise.all([
+    const [result] = await Promise.all([
       api(`/api/analytics?${new URLSearchParams(filters.value)}`),
-      api("/api/links/tags"),
+      refreshTags(),
     ]);
     if (current === generation) {
       data.value = result;
-      tags.value = availableTags;
     }
   } catch (e) {
     if (current === generation) error.value = e.message;

@@ -28,12 +28,14 @@ export default defineConfig({
   ],
   webServer: {
     command:
-      "uv run --project ../api uvicorn app.main:app --app-dir ../api --host 127.0.0.1 --port 5202",
+      process.env.LINK_WITHU_BIN ||
+      "cargo run --locked --manifest-path ../api/Cargo.toml",
     url: "http://127.0.0.1:5202/api/health",
     reuseExistingServer: false,
     env: {
+      PORT: "5202",
       ADMIN_PASSWORD: "browser-test-only",
-      DATABASE_URL: `sqlite+aiosqlite:///${database}`,
+      DATABASE_URL: `sqlite:///${database}`,
       BASE_URL: "http://127.0.0.1:5202",
       TZ: "Asia/Shanghai",
       FRONTEND_DIST: resolve("dist"),

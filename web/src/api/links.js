@@ -1,4 +1,4 @@
-import { session, saveSession } from "../state";
+import { session, saveSession, tags } from "../state";
 
 export async function request(path, options = {}) {
   const headers = new Headers(options.headers);
@@ -52,6 +52,18 @@ export const getStats = (code, params = {}) =>
   api(
     `/api/links/stats/${encodeURIComponent(code)}?${new URLSearchParams(params)}`,
   );
+let tagGeneration = 0;
+export async function refreshTags() {
+  const current = ++tagGeneration;
+  const token = session.value?.token;
+  if (!token) {
+    tags.value = [];
+    return;
+  }
+  const result = await api("/api/links/tags");
+  if (current === tagGeneration && token === session.value?.token)
+    tags.value = result;
+}
 export async function download(path) {
   const res = await request(path);
   const blob = await res.blob();

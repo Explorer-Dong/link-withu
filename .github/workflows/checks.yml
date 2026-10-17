@@ -12,7 +12,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,33 +20,34 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - uses: astral-sh/setup-uv@v6
+      - uses: dtolnay/rust-toolchain@master
         with:
-          version: "0.12.3"
-          python-version: "3.13"
-          enable-cache: true
-          cache-dependency-glob: api/uv.lock
-      - name: Install locked dependencies
+          toolchain: "1.99.1"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: api
+      - name: Install frontend dependencies
+        run: npm ci --prefix web
+      - name: Backend format and lint
         run: |
-          uv sync --project api --frozen
-          npm ci --prefix web
-      - name: Backend lint and format
-        run: |
-          uv run --project api ruff check api .github/scripts
-          uv run --project api ruff format --check api .github/scripts
-      - name: Python type checking
-        run: uv run --project api ty check --project api api .github/scripts --error-on-warning
+          cargo fmt --manifest-path api/Cargo.toml -- --check
+          cargo clippy --manifest-path api/Cargo.toml --all-targets --locked -- -D warnings
       - name: Check frontend format
         run: npm run format:check --prefix web
       - name: Build frontend
         run: npm run build --prefix web
       - name: API, migration and recovery tests
-        run: uv run --project api pytest -q
+        run: cargo test --manifest-path api/Cargo.toml --locked
       - name: Install Chromium
         working-directory: web
         run: npx playwright install --with-deps chromium
       - name: Desktop and mobile browser tests
         run: npm run test:e2e --prefix web
+      - name: Release validation and utility checks
+        run: |
+          python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+          python3 -m compileall -q .github/scripts
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

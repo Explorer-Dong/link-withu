@@ -109,6 +109,8 @@ async function remove() {
   saving.value = true;
   try {
     await deleteLink(removing.value.short_code);
+    if (created.value?.short_code === removing.value.short_code)
+      created.value = null;
     removing.value = null;
     changed();
     notify("短链已删除");

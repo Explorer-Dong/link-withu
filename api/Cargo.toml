@@ -1,0 +1,38 @@
+[package]
+name = "link-withu"
+version = "1.0.1"
+edition = "2024"
+description = "A compact URL shortener with SQLite storage."
+license = "MIT"
+publish = false
+
+[dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+tokio = { version = "1", features = ["rt", "macros", "net", "sync", "fs", "io-util", "signal"] }
+tokio-util = { version = "0.7", features = ["io"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+chrono-tz = "0.10"
+url = "2"
+percent-encoding = "2"
+base64 = "0.22"
+hmac = "0.12"
+sha2 = "0.10"
+rand = "0.9"
+subtle = "2"
+tempfile = "3"
+csv = "1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+utoipa = "6"
+dotenvy = "0.15"
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

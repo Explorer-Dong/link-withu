@@ -31,6 +31,10 @@ async function load() {
   try {
     info.value = await api("/api/admin/settings");
     for (const key of Object.keys(form)) form[key] = info.value.site[key];
+    site.value = {
+      app_name: info.value.site.app_name,
+      version: info.value.version,
+    };
   } catch (e) {
     error.value = e.message;
   } finally {
@@ -44,7 +48,9 @@ async function save() {
       method: "PUT",
       body: JSON.stringify(form),
     });
-    site.value.app_name = updated.app_name;
+    for (const key of Object.keys(form)) form[key] = updated[key];
+    info.value.site = updated;
+    site.value = { ...site.value, app_name: updated.app_name };
     notify("设置已保存");
   } catch (e) {
     notify(e.message, true);
@@ -112,7 +118,6 @@ async function restore() {
     restorePreview.value = null;
     restoreFile.value = null;
     await load();
-    site.value.app_name = info.value.site.app_name;
     window.dispatchEvent(new Event("links-changed"));
     notify(`已恢复 ${result.links} 个短链、${result.visits} 条访问记录`);
   } catch (e) {

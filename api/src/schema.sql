@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS short_links (id INTEGER PRIMARY KEY, short_code VARCHAR(32) NOT NULL, original_url VARCHAR(2048) NOT NULL, title VARCHAR(120) NOT NULL DEFAULT '', note VARCHAR(2000) NOT NULL DEFAULT '', is_custom INTEGER DEFAULT 0, created_at DATETIME);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_short_links_short_code ON short_links(short_code);
+CREATE INDEX IF NOT EXISTS ix_short_links_id ON short_links(id);
+CREATE TABLE IF NOT EXISTS visits (id INTEGER PRIMARY KEY, short_link_id INTEGER NOT NULL REFERENCES short_links(id) ON DELETE CASCADE, visited_at DATETIME, ip VARCHAR(45), user_agent TEXT, referrer_domain VARCHAR(253), device VARCHAR(20) NOT NULL DEFAULT 'unknown', browser VARCHAR(30) NOT NULL DEFAULT 'unknown', is_bot INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS ix_visits_id ON visits(id);
+CREATE INDEX IF NOT EXISTS ix_visits_short_link_id ON visits(short_link_id);
+CREATE INDEX IF NOT EXISTS ix_visits_link_time ON visits(short_link_id, visited_at);
+CREATE INDEX IF NOT EXISTS ix_visits_visited_at ON visits(visited_at);
+CREATE INDEX IF NOT EXISTS ix_visits_is_bot ON visits(is_bot);
+CREATE TABLE IF NOT EXISTS link_tags (short_link_id INTEGER NOT NULL REFERENCES short_links(id) ON DELETE CASCADE, name VARCHAR(40) NOT NULL, PRIMARY KEY (short_link_id, name));
+CREATE INDEX IF NOT EXISTS ix_link_tags_name ON link_tags(name);
+CREATE TABLE IF NOT EXISTS app_settings (key VARCHAR(40) PRIMARY KEY NOT NULL, value TEXT NOT NULL);

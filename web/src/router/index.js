@@ -38,7 +38,6 @@ router.beforeEach((to) => {
     return { path: "/login", query: { redirect: to.fullPath } };
   }
   if (to.path === "/login" && isLoggedIn()) return "/";
-  document.title = `${to.meta.title || "Link WithU"} · Link WithU`;
 });
 window.addEventListener("auth-expired", () => {
   const redirect = router.currentRoute.value.fullPath;
