@@ -9,7 +9,7 @@ permissions:
 
 concurrency:
   group: link-withu-release
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event.forced == true }}
 
 env:
   IMAGE: xwithu/link-withu
