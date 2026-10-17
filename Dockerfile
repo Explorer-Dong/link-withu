@@ -7,21 +7,32 @@ COPY web/ ./
 RUN npm run build
 
 FROM rust:1.99.1-slim-bookworm AS toolchain
-RUN rustup component add rustfmt clippy
 WORKDIR /proj/api
 
 FROM toolchain AS dev
+RUN rustup component add rustfmt clippy
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo install cargo-watch --version 8.5.3 --locked
 CMD ["cargo", "watch", "-w", "src", "-w", "Cargo.toml", "-w", "Cargo.lock", "-x", "run --locked"]
 
-FROM toolchain AS build
-ARG TARGETARCH
+FROM toolchain AS chef
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo install cargo-chef --version 0.1.78 --locked
+
+FROM chef AS planner
 COPY api/Cargo.toml api/Cargo.lock ./
 COPY api/src ./src
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=link-withu-target-${TARGETARCH},target=/proj/api/target \
-    cargo build --release --locked && cp target/release/link-withu /usr/local/bin/link-withu
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS dependencies
+COPY --from=planner /proj/api/recipe.json recipe.json
+# Keep dependency artifacts in an image layer so remote BuildKit caches retain them.
+RUN cargo chef cook --release --locked --recipe-path recipe.json
+
+FROM dependencies AS build
+COPY api/Cargo.toml api/Cargo.lock ./
+COPY api/src ./src
+RUN cargo build --release --locked && cp target/release/link-withu /usr/local/bin/link-withu
 
 FROM debian:bookworm-slim
 WORKDIR /proj/api

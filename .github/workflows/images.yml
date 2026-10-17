@@ -1,0 +1,154 @@
+name: Image checks
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/images.yml"
+      - ".github/workflows/release.yml"
+      - ".github/scripts/**"
+      - "api/Cargo.toml"
+      - "api/Cargo.lock"
+      - "web/package.json"
+      - "web/package-lock.json"
+      - "rust-toolchain.toml"
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/images.yml"
+      - ".github/workflows/release.yml"
+      - ".github/scripts/**"
+      - "api/Cargo.toml"
+      - "api/Cargo.lock"
+      - "web/package.json"
+      - "web/package-lock.json"
+      - "rust-toolchain.toml"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ""
+      upload:
+        type: boolean
+        default: false
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: false
+      DOCKERHUB_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+
+env:
+  IMAGE: xwithu/link-withu
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      LOCAL_IMAGE: xwithu/link-withu:ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate image version
+        id: version
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PYVERSION'
+          import os
+          import sys
+          import tomllib
+          from pathlib import Path
+          sys.path.insert(0, '.github/scripts')
+          from check_release import validate_release
+          manifest = tomllib.loads(Path('api/Cargo.toml').read_text())
+          requested = os.environ.get('REQUESTED_VERSION') or manifest['package']['version']
+          version = validate_release(Path.cwd(), 'v' + requested)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'version={version}\n')
+          PYVERSION
+      - uses: docker/setup-buildx-action@v4
+      - name: Build native image once
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: ${{ env.LOCAL_IMAGE }}
+          labels: org.opencontainers.image.version=${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=link-withu-${{ matrix.arch }}
+          cache-to: type=gha,scope=link-withu-${{ matrix.arch }},mode=max
+          provenance: false
+      - name: Smoke test the image that will be uploaded
+        env:
+          ARCH: ${{ matrix.arch }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$LOCAL_IMAGE")" = "linux/$ARCH"
+          container_id=$(docker run -d -p 127.0.0.1::5201 \
+            -e ADMIN_PASSWORD=ci-smoke-test-only "$LOCAL_IMAGE")
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              docker logs "$container_id" || true
+              docker inspect --format '{{json .State}}' "$container_id" || true
+            fi
+            docker rm -f "$container_id" >/dev/null 2>&1 || true
+            exit "$status"
+          }
+          trap cleanup EXIT
+          port=$(docker inspect --format '{{ (index (index .NetworkSettings.Ports "5201/tcp") 0).HostPort }}' "$container_id")
+          EXPECTED_VERSION="$VERSION" ADMIN_PASSWORD=ci-smoke-test-only \
+            SMOKE_BASE_URL="http://127.0.0.1:$port" python3 .github/scripts/smoke.py
+          docker exec "$container_id" /usr/local/bin/link-withu --healthcheck
+      - uses: docker/login-action@v4
+        if: inputs.upload
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Upload the tested image and record its immutable digest
+        if: inputs.upload
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          docker push "$LOCAL_IMAGE"
+          mkdir -p "$RUNNER_TEMP/digests"
+          docker image inspect --format '{{json .RepoDigests}}' "$LOCAL_IMAGE" > "$RUNNER_TEMP/repo-digests.json"
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          prefix = os.environ['IMAGE'] + '@'
+          refs = json.loads((root / 'repo-digests.json').read_text())
+          digests = [ref.removeprefix(prefix) for ref in refs if ref.startswith(prefix)]
+          if len(digests) != 1 or not re.fullmatch(r'sha256:[0-9a-f]{64}', digests[0]):
+              raise SystemExit('Expected one immutable digest for the tested image')
+          (root / 'digests' / (os.environ['ARCH'] + '.txt')).write_text(digests[0] + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: inputs.upload
+        with:
+          name: image-digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*.txt
+          if-no-files-found: error
+          retention-days: 1
