@@ -6,9 +6,113 @@ import {
   login,
   navigate,
   resetData,
+  selectRange,
+  rangeDate,
+  seedAnalytics,
 } from "./helpers";
 
 test.beforeEach(resetData);
+
+test("locations show beside IP addresses and share analytics filters", async ({
+  page,
+  request,
+}) => {
+  await seedAnalytics(request);
+  await login(page);
+  const locations = page.locator(".breakdown").filter({
+    has: page.getByRole("button", { name: "地理位置", exact: true }),
+  });
+  await expect(locations.locator(".breakdown-row")).toHaveCount(3);
+  await page.goto("/?short_code=item-1");
+  await expect(page.locator(".visit-details th")).toHaveText([
+    "访问时间",
+    "IP",
+    "地址",
+    "来源",
+    "设备 / 浏览器",
+    "类型",
+  ]);
+  const row = page.locator(".visit-details tbody tr").first();
+  await expect(row.locator("td").nth(1)).toHaveText("8.8.8.1");
+  await expect(row.locator("td").nth(2)).toHaveText("美国 城市 1");
+  await expect(locations).toContainText("美国 城市 1");
+  await page.getByRole("button", { name: "地理位置", exact: true }).click();
+  await expect(page.getByRole("dialog").locator(".detail-row")).toHaveCount(1);
+  await expect(page.getByRole("dialog")).toContainText("美国 城市 1");
+  await page.keyboard.press("Escape");
+  await assertNoOverflow(page);
+});
+
+test("resolved locations refresh without replacing a newer selection", async ({
+  page,
+  request,
+}) => {
+  await seedAnalytics(request);
+  let pending = true;
+  await page.route(
+    (url) => url.pathname === "/api/analytics",
+    async (route) => {
+      const response = await route.fetch();
+      const data = await response.json();
+      if (pending) {
+        data.summary.pending_locations = 1;
+        data.locations = [{ name: "未知", count: 16 }];
+      }
+      await route.fulfill({ response, json: data });
+    },
+  );
+  await page.route(
+    (url) =>
+      url.pathname === "/api/analytics/breakdown" &&
+      url.searchParams.get("kind") === "locations",
+    async (route) => {
+      const url = new URL(route.request().url());
+      const groups = Array.from({ length: 6 }, (_, i) => ({
+        name: `已解析位置 ${i + 1}`,
+        count: 1,
+      }));
+      if (pending) groups.push({ name: "未知", count: 1 });
+      const skip = Number(url.searchParams.get("skip"));
+      await route.fulfill({
+        json: { total: groups.length, items: groups.slice(skip, skip + 6) },
+      });
+    },
+  );
+  await login(page);
+  const locations = page.locator(".breakdown").filter({
+    has: page.getByRole("button", { name: "地理位置", exact: true }),
+  });
+  await expect(locations).toContainText("未知");
+  await page.locator(".chart-point").first().hover();
+  await expect(page.getByRole("tooltip")).toBeVisible();
+  const refresh = await page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/analytics",
+  );
+  await refresh.finished();
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      ),
+  );
+  await expect(page.getByRole("tooltip")).toBeVisible();
+  await page.getByRole("button", { name: "地理位置", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator(".detail-row")).toHaveCount(6);
+  await dialog.getByRole("button", { name: "下一页" }).click();
+  await expect(dialog.locator(".detail-row")).toHaveCount(1);
+  await expect(dialog).toContainText("未知");
+  pending = false;
+  await expect(dialog.locator(".detail-row")).toHaveCount(6, { timeout: 7000 });
+  await expect(dialog).toContainText("第 1 / 1 页");
+  await dialog.getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(locations).toContainText("城市", { timeout: 7000 });
+  await page.goto("/?short_code=item-2");
+  await expect(page.locator(".visit-details tbody")).toContainText(
+    "中国 城市 2",
+  );
+  await expect(locations).toContainText("中国 城市 2");
+});
 
 function deferred() {
   let resolve;
@@ -58,7 +162,7 @@ test("late tag refreshes cannot remove a newly created tag", async ({
   page,
 }) => {
   await login(page);
-  await navigate(page, "链接管理");
+  await navigate(page, "链接");
   await expect(
     page.getByRole("heading", { name: "从你的第一个链接开始" }),
   ).toBeVisible();
@@ -103,7 +207,7 @@ test("creation errors, clipboard, modal cancellation and deletion retry", async 
   page,
 }) => {
   await login(page);
-  await navigate(page, "链接管理");
+  await navigate(page, "链接");
   let failCreate = true;
   await page.route("**/api/links", (route) => {
     if (route.request().method() === "POST" && failCreate) {
@@ -256,13 +360,13 @@ test("analytics ranges, rankings, tag groups, bot filtering and visit pages", as
   await expect(details.locator("tbody tr")).toHaveCount(13);
   await details.getByRole("button", { name: "上一页" }).click();
   await expect(details.locator("tbody tr")).toHaveCount(50);
-  for (const [label, count] of [
-    ["近 7 天", 60],
-    ["近 30 天", 61],
-    ["近 90 天", 62],
-    ["全部时间", 63],
+  for (const [days, count] of [
+    [7, 60],
+    [30, 61],
+    [90, 62],
+    [0, 63],
   ]) {
-    await page.getByRole("button", { name: label, exact: true }).click();
+    await selectRange(page, days);
     await expect(page.locator(".trend-card")).toContainText(
       `共 ${count} 次访问`,
     );
@@ -286,6 +390,121 @@ test("analytics ranges, rankings, tag groups, bot filtering and visit pages", as
   await assertNoOverflow(page);
 });
 
+test("three-row summaries open six-row pages and preserve filters", async ({
+  page,
+  request,
+}) => {
+  await seedAnalytics(request);
+  await login(page);
+  await expect(
+    page.locator(".breakdown").first().locator(".breakdown-row"),
+  ).toHaveCount(3);
+  await expect(page.locator(".ranking-row")).toHaveCount(3);
+  await expect(page.locator(".group-row")).toHaveCount(3);
+  await expect(page.getByText("访问占比", { exact: true })).toHaveCount(0);
+  for (const title of [
+    "访问来源",
+    "浏览器",
+    "地理位置",
+    "热门短链",
+    "标签分组",
+  ]) {
+    await page.getByRole("button", { name: title, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator(".detail-row")).toHaveCount(6);
+    await expect(dialog).toContainText("共 16 项");
+    await dialog.getByRole("button", { name: "下一页" }).click();
+    await expect(dialog.locator(".detail-row")).toHaveCount(6);
+    await expect(dialog).toContainText("第 2 / 3 页");
+    await expect(dialog.locator(".rank-number").first()).toHaveText("07");
+    await dialog.getByRole("button", { name: "下一页" }).click();
+    await expect(dialog.locator(".detail-row")).toHaveCount(4);
+    await expect(dialog).toContainText("第 3 / 3 页");
+    await expect(dialog.locator(".rank-number").first()).toHaveText("13");
+    await expect(dialog.getByRole("button", { name: "下一页" })).toBeDisabled();
+    await dialog.getByRole("button", { name: "上一页" }).click();
+    await expect(dialog).toContainText("第 2 / 3 页");
+    await dialog.getByRole("button", { name: "上一页" }).click();
+    await expect(dialog.locator(".detail-row")).toHaveCount(6);
+    await dialog.getByRole("button", { name: "关闭", exact: true }).click();
+  }
+  await page.getByRole("button", { name: "设备分布", exact: true }).click();
+  await expect(page.getByRole("dialog").locator(".detail-row")).toHaveCount(4);
+  await expect(page.getByRole("dialog")).toContainText("未知");
+  await page.keyboard.press("Escape");
+  await page.locator(".date-range-picker > summary").click();
+  await page.getByLabel("开始日期", { exact: true }).fill("2026-01-02");
+  await page.getByLabel("结束日期", { exact: true }).fill("2026-01-01");
+  await page.getByRole("button", { name: "应用", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "开始日期不能晚于结束日期",
+  );
+  await page.getByLabel("开始日期", { exact: true }).fill("2026-01-01");
+  await page.getByRole("button", { name: "应用", exact: true }).click();
+  await expect(page.locator(".trend-card")).toContainText(
+    "2026-01-01 至 2026-01-01 · 共 15 次访问",
+  );
+  await page.getByRole("button", { name: "访问来源", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("共 15 项");
+  await page.keyboard.press("Escape");
+  await page.locator(".date-range-picker > summary").click();
+  await page.getByRole("button", { name: "重置", exact: true }).click();
+  await expect(page.locator(".trend-card")).toContainText("共 16 次访问");
+  await assertNoOverflow(page);
+});
+
+test("chart hover, touch and keyboard reveal dates and visits with particles", async ({
+  page,
+  request,
+}) => {
+  await seedAnalytics(request);
+  await login(page);
+  await page.locator(".date-range-picker > summary").click();
+  await page.getByLabel("开始日期", { exact: true }).fill("2026-01-01");
+  await page.getByLabel("结束日期", { exact: true }).fill("2026-01-02");
+  await page.getByRole("button", { name: "应用", exact: true }).click();
+  const chart = page.locator(".trend-chart");
+  await expect(chart.locator("polyline")).toBeVisible();
+  await chart.locator("svg").hover({ position: { x: 70, y: 80 } });
+  await expect(chart.getByRole("tooltip")).toContainText("2026-01-01");
+  await expect(chart.getByRole("tooltip")).toContainText("15 次访问");
+  await expect(chart.locator(".chart-particle")).toHaveCount(8);
+  await chart.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(chart.getByRole("tooltip")).toContainText("2026-01-02");
+  await expect(chart.getByRole("tooltip")).toContainText("1 次访问");
+  await page.keyboard.press("Escape");
+  await expect(chart.getByRole("tooltip")).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await chart.locator("svg").dispatchEvent("pointerdown", {
+    clientX: (await chart.boundingBox()).x + 70,
+  });
+  await expect(chart.getByRole("tooltip")).toBeVisible();
+  await expect(chart.locator(".chart-particle").first()).toBeHidden();
+  await page.locator(".date-range-picker > summary").click();
+  await page.getByLabel("结束日期", { exact: true }).fill("2026-01-09");
+  await page.getByRole("button", { name: "应用", exact: true }).click();
+  await expect(chart.locator(".chart-point")).toHaveCount(9);
+  const positions = [];
+  for (const index of [0, 1, 7, 8]) {
+    const point = chart.locator(".chart-point").nth(index);
+    await point.hover();
+    const tooltip = chart.getByRole("tooltip");
+    await expect(tooltip).toContainText(
+      `2026-01-${String(index + 1).padStart(2, "0")}`,
+    );
+    const bubble = await tooltip.boundingBox();
+    const dot = await point.boundingBox();
+    const centerX = dot.x + dot.width / 2;
+    expect(bubble.x).toBeLessThan(centerX);
+    expect(bubble.x + bubble.width).toBeGreaterThan(centerX);
+    positions.push(bubble.x);
+  }
+  expect(positions[1] - positions[0]).toBeGreaterThan(2);
+  expect(positions[3] - positions[2]).toBeGreaterThan(2);
+  await assertNoOverflow(page);
+});
+
 test("list, statistics, details and settings errors offer working retries", async ({
   page,
   request,
@@ -306,7 +525,7 @@ test("list, statistics, details and settings errors offer working retries", asyn
       "/api/analytics",
       "/",
       () =>
-        expect(page.getByRole("heading", { name: "访问趋势" })).toBeVisible(),
+        expect(page.getByRole("heading", { name: "访问量趋势" })).toBeVisible(),
     ],
     [
       "/api/links/stats/retry",
@@ -325,7 +544,7 @@ test("list, statistics, details and settings errors offer working retries", asyn
       "/api/links/tags",
       "/",
       () =>
-        expect(page.getByRole("heading", { name: "访问趋势" })).toBeVisible(),
+        expect(page.getByRole("heading", { name: "访问量趋势" })).toBeVisible(),
     ],
   ]) {
     let fail = true;
@@ -352,6 +571,31 @@ test("list, statistics, details and settings errors offer working retries", asyn
   }
 });
 
+test("detail request failures can be retried without losing the dialog", async ({
+  page,
+  request,
+}) => {
+  await seedAnalytics(request);
+  await login(page);
+  let fail = true;
+  await page.route("**/api/analytics/breakdown?**", async (route) => {
+    if (fail) {
+      fail = false;
+      return route.fulfill({
+        status: 500,
+        json: { detail: "暂时无法加载统计" },
+      });
+    }
+    return route.continue();
+  });
+  await page.getByRole("button", { name: "访问来源", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
+    "暂时无法加载统计",
+  );
+  await page.getByRole("dialog").getByRole("button", { name: "重试" }).click();
+  await expect(page.getByRole("dialog").locator(".detail-row")).toHaveCount(6);
+});
+
 test("late list and analytics results cannot overwrite newer filters", async ({
   page,
   request,
@@ -363,7 +607,7 @@ test("late list and analytics results cannot overwrite newer filters", async ({
       data: { original_url: "https://example.org", short_code: code },
     });
   await login(page);
-  await navigate(page, "链接管理");
+  await navigate(page, "链接");
   const captured = deferred(),
     release = deferred();
   await page.route(
@@ -391,13 +635,14 @@ test("late list and analytics results cannot overwrite newer filters", async ({
   } finally {
     release.resolve();
   }
-  await navigate(page, "访问统计");
-  await expect(page.getByRole("heading", { name: "访问趋势" })).toBeVisible();
+  await navigate(page, "首页");
+  await expect(page.getByRole("heading", { name: "访问量趋势" })).toBeVisible();
   const capturedStats = deferred(),
     releaseStats = deferred();
   await page.route(
     (url) =>
-      url.pathname === "/api/analytics" && url.searchParams.get("days") === "7",
+      url.pathname === "/api/analytics" &&
+      url.searchParams.get("start_date") === rangeDate(6),
     async (route) => {
       const response = await route.fetch();
       capturedStats.resolve();
@@ -406,14 +651,14 @@ test("late list and analytics results cannot overwrite newer filters", async ({
     },
   );
   try {
-    await page.getByRole("button", { name: "近 7 天", exact: true }).click();
+    await selectRange(page, 7);
     await capturedStats.promise;
-    await page.getByRole("button", { name: "近 30 天", exact: true }).click();
+    await selectRange(page, 30);
     await expect(page.locator(".trend-chart circle")).toHaveCount(30);
     const delivered = page.waitForResponse(
       (r) =>
         new URL(r.url()).pathname === "/api/analytics" &&
-        new URL(r.url()).searchParams.get("days") === "7",
+        new URL(r.url()).searchParams.get("start_date") === rangeDate(6),
     );
     releaseStats.resolve();
     await delivered;
@@ -603,7 +848,7 @@ test("expired sessions, invalid storage, safe redirects and system theme", async
       return route.continue();
     },
   );
-  await navigate(page, "链接管理");
+  await navigate(page, "链接");
   await expect(page).toHaveURL(/\/login\?redirect=/);
   expect(
     await page.evaluate(() => localStorage.getItem("link-withu-admin-session")),

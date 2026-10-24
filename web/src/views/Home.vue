@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import PageHeading from "../components/PageHeading.vue";
 import Icon from "../components/Icon.vue";
 import Modal from "../components/Modal.vue";
 import { createLink, listLinks, updateLink, deleteLink } from "../api/links";
@@ -138,66 +139,77 @@ onUnmounted(() => {
 });
 </script>
 <template>
-  <div class="page-heading">
-    <div><h1>链接管理</h1></div>
-  </div>
-  <section class="card composer">
-    <div class="section-heading">
-      <h2><Icon name="plus" :size="18" />创建短链</h2>
-      <button type="button" class="text-btn" @click="expanded = !expanded">
-        {{ expanded ? "收起选项" : "更多选项"
-        }}<Icon :name="expanded ? 'chevron-up' : 'chevron-down'" :size="16" />
-      </button>
-    </div>
-    <form @submit.prevent="create">
-      <div class="url-create">
-        <label class="sr-only" for="new-url">目标链接</label>
-        <div class="input-with-icon">
-          <Icon name="link" :size="18" /><input
-            id="new-url"
-            v-model="form.original_url"
-            placeholder="粘贴你的长链接，例如 https://example.com/article"
-            required
-            maxlength="2048"
-          />
+  <PageHeading title="链接" />
+  <section class="create-section">
+    <h2 class="composer-title">创建短链</h2>
+    <div class="card composer">
+      <form @submit.prevent="create">
+        <div class="url-create">
+          <label class="sr-only" for="new-url">目标链接</label>
+          <div class="input-with-icon">
+            <Icon name="link" :size="18" /><input
+              id="new-url"
+              v-model="form.original_url"
+              placeholder="粘贴你的长链接，例如 https://example.com/article"
+              required
+              maxlength="2048"
+            />
+          </div>
+          <button class="btn primary" :disabled="saving">
+            {{ saving ? "创建中…" : "创建短链" }}
+          </button>
+          <button
+            type="button"
+            class="text-btn composer-options"
+            :aria-expanded="expanded"
+            aria-controls="create-options"
+            @click="expanded = !expanded"
+          >
+            {{ expanded ? "收起选项" : "更多选项"
+            }}<Icon
+              :name="expanded ? 'chevron-up' : 'chevron-down'"
+              :size="16"
+            />
+          </button>
         </div>
-        <button class="btn primary" :disabled="saving">
-          <Icon name="plus" :size="17" />{{ saving ? "创建中…" : "创建短链" }}
+        <div
+          id="create-options"
+          v-if="expanded"
+          class="form-grid optional-fields"
+        >
+          <label
+            >链接名称<input
+              v-model="form.title"
+              placeholder="给链接起个名字"
+              maxlength="120" /></label
+          ><label
+            >自定义短码<input
+              v-model="form.short_code"
+              placeholder="留空自动生成"
+              pattern="[A-Za-z0-9_-]{1,32}"
+              maxlength="32" /></label
+          ><label
+            >标签<input
+              v-model="form.tagText"
+              placeholder="博客, 公众号, 活动" /></label
+          ><label
+            >备注<input
+              v-model="form.note"
+              placeholder="记录链接的用途"
+              maxlength="2000"
+          /></label>
+        </div>
+      </form>
+      <div v-if="created" class="created-result">
+        <span
+          ><span class="status-dot"></span>已创建
+          <a :href="created.short_url" target="_blank" rel="noreferrer">{{
+            created.short_url
+          }}</a></span
+        ><button class="text-btn" @click="copy(created.short_url)">
+          <Icon name="copy" :size="15" />复制链接
         </button>
       </div>
-      <div v-if="expanded" class="form-grid optional-fields">
-        <label
-          >链接名称<input
-            v-model="form.title"
-            placeholder="给链接起个名字"
-            maxlength="120" /></label
-        ><label
-          >自定义短码<input
-            v-model="form.short_code"
-            placeholder="留空自动生成"
-            pattern="[A-Za-z0-9_-]{1,32}"
-            maxlength="32" /></label
-        ><label
-          >标签<input
-            v-model="form.tagText"
-            placeholder="博客, 公众号, 活动" /></label
-        ><label
-          >备注<input
-            v-model="form.note"
-            placeholder="记录链接的用途"
-            maxlength="2000"
-        /></label>
-      </div>
-    </form>
-    <div v-if="created" class="created-result">
-      <span
-        ><span class="status-dot"></span>已创建
-        <a :href="created.short_url" target="_blank" rel="noreferrer">{{
-          created.short_url
-        }}</a></span
-      ><button class="text-btn" @click="copy(created.short_url)">
-        <Icon name="copy" :size="15" />复制链接
-      </button>
     </div>
   </section>
   <section class="links-section">

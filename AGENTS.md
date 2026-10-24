@@ -14,6 +14,7 @@
 - `api/src/config.rs`、`validation.rs`：配置加载、字段校验及客户端分类。
 - `api/src/db.rs`、`schema.sql`：数据库连接、表结构、迁移及旧数据回填。
 - `api/src/restore.rs`：备份流式解析、暂存校验及覆盖恢复。
+- `api/src/geolocation.rs`：在线 IP 地理位置解析、缓存及后台重试。
 - `api/src/models.rs`、`openapi.rs`：接口模型及 OpenAPI 文档。
 - `web/src/views/`：登录、访问统计、链接管理及设置页面。
 - `web/src/state.js`、`api/links.js`、`router/index.js`：共享状态、请求及路由。
@@ -66,6 +67,7 @@ cargo run --manifest-path api/Cargo.toml --locked
 | `DATABASE_URL` | 指向 `api/short_links.db` 的 SQLite URL | 持久化文件；兼容 `sqlite:///` 和旧版 `sqlite+aiosqlite:///` 前缀 |
 | `FRONTEND_DIST` | 项目根目录下的 `web/dist` | 后端静态资源目录 |
 | `API_PROXY` | `http://localhost:5201` | 仅用于 Vite 开发代理 |
+| `GEOIP_API_URL` | `https://ipwho.is/` | 兼容 IPWhois 的 HTTP/HTTPS 接口；空字符串关闭在线查询；不允许 URL 认证、查询参数及片段 |
 
 - 设置页保存的站点名称、公开地址和随机短码长度覆盖环境变量默认值；统计时区始终读取 `TZ`。
 - `DATABASE_URL` 拒绝内存数据库、`file:` URI 和查询参数。
@@ -73,7 +75,7 @@ cargo run --manifest-path api/Cargo.toml --locked
 
 ## 功能与数据约束
 
-- 保留独立登录、访问统计 `/`、链接管理 `/links` 和设置 `/settings` 页面，以及桌面、手机和浅色／深色／跟随系统外观。
+- 保留独立登录、首页 `/`、链接 `/links` 和设置 `/settings` 页面，以及桌面、手机和浅色／深色／跟随系统外观；三个工作区页面标题左侧展示站点 logo。
 - 管理接口使用 Bearer 令牌；会话有效期 24 小时，修改管理员密码后旧令牌失效。
 - 公共跳转 `/r/{short_code}` 无需登录，返回 302 和空响应体，成功响应前持久化访问记录。
 - 创建及编辑地址只接受 HTTP／HTTPS，不接受包含账号密码的 URL；保留 Unicode 地址支持。
@@ -81,11 +83,15 @@ cargo run --manifest-path api/Cargo.toml --locked
 - 编辑保留短码；删除链接时一并删除关联访问记录和标签。
 - 链接列表每页 10 条，访问明细每页 50 条；保留搜索、标签筛选、排序及机器人筛选。
 - 搜索、排序、标签、站点名称及会话请求均需防止迟到响应覆盖新状态。
-- 统计按配置时区分桶，处理夏令时，排除未来访问；来源只保留域名。
+- 统计按配置时区分桶，处理夏令时、部分午夜跳变和整日跳过，日期边界精确到秒，排除未来访问；来源只保留域名。
+- 首页默认展示全部历史，通过日期选择器应用或重置时间区间；`start_date`、`end_date` 必须成对提供，使用 `YYYY-MM-DD`，起止日期均包含在内，不能与非零 `days` 同用。访问明细、分类详情及访问 CSV 共享时间筛选；旧版 `days` API 保持兼容。
+- 来源、设备、浏览器、热门短链及标签首页各展示前三项；点击标题后通过 `/api/analytics/breakdown` 按需分页，默认每页 6 项，不截断完整排行。趋势图支持悬浮、触摸和键盘查看日期、访问量及粒子效果，减少动态效果偏好下关闭粒子动画。
 - CSV 导出保留 UTF-8 BOM、正确转义、公式防护和下载响应头。
 - 修改 API 时同步维护接口模型、OpenAPI 注解、`api/src/openapi.rs` 和对应测试；保留 API、文档、跳转与 SPA 静态路由边界。
 - SQLite 读写通过独立工作线程执行；保留有界队列、事务、失败回滚和断连清理，避免在异步请求线程执行阻塞数据库操作。
 - 迁移保持幂等，兼容旧表结构和数据，按批次回填历史访问分类。
+- 地理位置通过后台 HTTPS 查询并按 IP 缓存在 `ip_locations`；不在跳转或 SQLite 工作线程中等待网络。使用中文结果，支持 IPv4/IPv6，内网和保留地址本地识别。超时、无效响应和限流退避重试；接口只接收公网 IP。测试使用本地假接口或设置空 `GEOIP_API_URL`，不调用公网服务。
+- 首页地理位置展示前三项，点击标题后每页六项；时间、标签、短链及机器人筛选与其他统计一致。访问明细在 IP 右侧展示地址，访问 CSV 包含 `location` 列。版本 1 JSON 备份以可选的 `country`、`region`、`city` 字段保留已解析地址，旧版缺失字段默认空并补齐查询。
 - 保留 SQLite 表结构、生产数据挂载路径和 JSON 备份格式的旧版兼容性。
 - JSON 备份包含全部链接、访问记录及设置，格式标识为 `link-withu-backup`，版本为 `1`，上限为 50 MiB。
 - 备份导出及恢复保持流式处理，不将全部访问历史或完整备份载入内存。
@@ -109,7 +115,7 @@ docker compose up -d
 构建生产镜像：
 
 ```bash
-docker build -t link-withu:v1.0.1 .
+docker build -t link-withu:v1.0.2 .
 ```
 
 ## 检查与测试
@@ -155,27 +161,28 @@ Docker 使用固定版本的 `cargo-chef` 将 Rust 依赖编译为独立缓存�
 
 ## 测试覆盖
 
-测试按用户功能和数据完整性组织。增加功能时，同步补充正常流程、失败后的状态及本表中的对应项；新增 API 还需更新 `generated_openapi_versions_routes_and_spa_boundaries` 的操作清单。
+测试按用户功能和数据完整性组织。浏览器用例优先归入现有测试文件，不按发布版本新建测试文件。增加功能时，同步补充正常流程、失败后的状态及本表中的对应项；新增 API 还需更新 `generated_openapi_versions_routes_and_spa_boundaries` 的操作清单。
 
 | 功能 | 自动化验证 | 用例位置 |
 | --- | --- | --- |
 | 登录与会话 | 正确／错误密码、过期与伪造令牌、密码变更、认证头大小写、缺少管理员密码、受保护 API、前端会话失效与安全跳转 | `api/tests/api.rs`、`api/tests/review.rs`、两组浏览器用例 |
-| 站点名称 | 保存后立即更新标题与登录页、页面切换、刷新、备份恢复、迟到的首次请求、服务端规范化结果、读取失败的默认名称 | `web/tests/workspace.spec.js`、`web/tests/review.spec.js` |
+| 站点名称 | 保存后立即更新标题与登录页、页面切换、刷新、备份恢复、迟到的首次请求、服务端规范化结果、读取失败的默认名称、窄屏下最长连续名称换行 | `web/tests/workspace.spec.js`、`web/tests/review.spec.js` |
 | 创建短链 | 自定义／随机短码、重复短码、公开地址与长度设置、URL 协议和端口、Unicode 地址、字段类型与长度限制、失败重试 | `api/tests/api.rs`、`api/tests/review.rs`、两组浏览器用例 |
 | 编辑与删除 | 保留短码、更新地址／名称／备注／标签、删除关联访问记录、取消与关闭弹窗、保存失败重试、删除后清除失效复制区 | `api/tests/api.rs`、两组浏览器用例 |
 | 搜索、标签与排序 | 名称／备注／地址／短码／标签搜索、通配符转义、标签去重与筛选、清除筛选、三种排序、旧请求不能覆盖新结果 | `api/tests/api.rs`、两组浏览器用例 |
 | 链接分页 | 每页 10 条、前后翻页、筛选后回首页、末页删除、搜索防抖与排序并发 | `web/tests/workspace.spec.js` |
 | 复制链接 | 创建结果及列表复制正确 URL、权限失败提示 | `web/tests/review.spec.js` |
 | 公共跳转 | 无需登录、302 地址及空响应体、Unicode、未知短码、并发持久化访问、可信反代 IP 与无效 IP 回退 | `api/tests/api.rs`、`api/tests/review.rs` |
-| 访问统计 | 全部／7／30／90 天、累计与分段计数、超过 90 天的分桶、排除未来数据、时区和夏令时、短链和标签筛选、排名与标签分组 | `api/tests/api.rs`、`api/src/analytics.rs`、两组浏览器用例 |
-| 来源与客户端分类 | 只保留来源域名、异常来源、桌面／手机／平板／未知设备、常见浏览器与机器人分类 | `api/tests/api.rs`、`api/tests/review.rs` |
+| 访问统计 | 全部历史／自选日期区间、旧版天数参数、包含起止日、非法区间、累计与分段计数、长区间分桶、排除未来数据、时区和夏令时、短链和标签筛选、三行摘要与六行详情分页、完整排行及失败重试、趋势交互与减少动态效果 | `api/tests/api.rs`、`api/tests/analytics.rs`、`api/src/analytics.rs`、两组浏览器用例 |
+| 来源与客户端分类 | 只保留来源域名、异常来源、桌面／手机／平板／未知设备、常见浏览器与机器人分类、窄屏下长域名不撑开统计卡片 | `api/tests/api.rs`、`api/tests/review.rs`、`web/tests/workspace.spec.js` |
 | 访问明细 | 全部历史、每页 50 条、翻页、机器人筛选后重置页码、失败后重试 | `api/tests/api.rs`、`web/tests/review.spec.js` |
+| 地理位置 | 在线中文位置、IPv4/IPv6、缓存去重与重启持久化、后台查询不阻塞跳转、历史回填、失败重试及限流退避、内网不联网、位置排行与分页、明细地址、CSV 与备份恢复兼容 | `api/src/geolocation.rs`、`api/tests/analytics.rs`、`web/tests/review.spec.js` |
 | CSV 导出 | 链接／访问两种导出、标签和短码范围、时间及机器人筛选、UTF-8 BOM、引号／换行、公式防护、下载响应头 | `api/tests/api.rs`、`api/tests/review.rs` |
 | JSON 备份 | 完整记录与设置、旧字段默认值、大历史流式导出、50 MiB 限制、浏览器下载与失败重试 | `api/tests/restore.rs`、两组浏览器用例 |
 | 覆盖恢复 | 确认头与确认输入、文件预览和取消、超限／无效文件、重复记录／孤立访问／非法日期、字段缺失、成员乱序、写入及提交失败回滚、上传中断清理、并发恢复拒绝、上传期间仍能跳转 | `api/tests/restore.rs`、`api/tests/review.rs`、两组浏览器用例 |
 | 设置与外观 | 名称／公开地址／随机长度保存及失败重试、标签缓存请求乱序、浅色／深色／跟随系统、退出登录 | `api/tests/api.rs`、两组浏览器用例 |
 | 配置与旧库 | `.env` 优先级、环境变量覆盖、默认值、旧数据库 URL、拒绝内存 URI、启动校验、旧表结构补齐、分类回填、重复迁移、SQLite 完整性 | `api/src/config.rs`、`api/tests/migration.rs` |
-| 服务与文档 | 健康检查成功／失败、版本命令、SIGTERM 退出、请求限流及断连恢复、16 个 API 操作清单、Swagger／ReDoc、静态文件类型和路径穿越防护 | `api/tests/api.rs`、`api/tests/migration.rs`、`api/tests/review.rs` |
+| 服务与文档 | 健康检查成功／失败、版本命令、SIGTERM 退出、请求限流及断连恢复、17 个 API 操作清单、Swagger／ReDoc、静态文件类型和路径穿越防护 | `api/tests/api.rs`、`api/tests/migration.rs`、`api/tests/review.rs` |
 | 生产镜像 | amd64／arm64 的真实容器启动、前端资源、认证、跳转、统计、备份恢复、原生健康检查；启动期间连接重置／中断／超时重试、持续失败超时、错误版本仍失败 | `.github/scripts/smoke.py`、`.github/scripts/test_smoke.py`、发布工作流 |
 | 发布版本 | 必须使用稳定的 `vMAJOR.MINOR.PATCH`，四个版本文件一致，缺失凭据时拒绝执行，Actions 输出格式 | `.github/scripts/test_release.py` |
 | 发布镜像完整性 | 必须同时包含两个架构，拒绝缺失／非法摘要、错误平台、重复架构、未经测试的镜像，以及版本与 latest 不一致 | `.github/scripts/test_verify_images.py` |

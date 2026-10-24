@@ -133,6 +133,8 @@ impl<'de> Visitor<'de> for Rows<'_> {
                 );
                 db::exec(&self.stage.connection,"INSERT INTO visits(id,short_link_id,visited_at,ip,user_agent,referrer_domain,device,browser,is_bot) VALUES (?,?,?,?,?,?,?,?,?)",&[v["id"].clone(),v["short_link_id"].clone(),v["visited_at"].clone(),v["ip"].clone(),v["user_agent"].clone(),v["referrer_domain"].clone(),v["device"].clone(),v["browser"].clone(),v["is_bot"].clone()]).map_err(|_|de::Error::custom("备份包含重复访问 ID"))?;
                 self.stage.visits += 1;
+                crate::geolocation::remember(&self.stage.connection, &v)
+                    .map_err(|e| de::Error::custom(e.1))?;
             }
         }
         Ok(())
@@ -156,6 +158,9 @@ fn validate_visit(v: &Value) -> Result<()> {
         ("referrer_domain", 253, true),
         ("device", 20, false),
         ("browser", 30, false),
+        ("country", 100, false),
+        ("region", 100, false),
+        ("city", 100, false),
     ] {
         if !nullable || !v[key].is_null() {
             validation::text(v, key, "", max)?;
@@ -311,7 +316,13 @@ pub async fn receive(app: &App, headers: &HeaderMap, body: Body) -> Result<Reply
     app.writer.restore(move |conn| apply(conn, staged)).await
 }
 fn apply(conn: &Connection, staged: Staged) -> Result<Reply> {
-    for table in ["visits", "link_tags", "short_links", "app_settings"] {
+    for table in [
+        "visits",
+        "link_tags",
+        "short_links",
+        "app_settings",
+        "ip_locations",
+    ] {
         conn.execute(&format!("DELETE FROM {table}"), [])?;
     }
     for (table, columns) in [
@@ -320,6 +331,10 @@ fn apply(conn: &Connection, staged: Staged) -> Result<Reply> {
             "id,short_code,original_url,title,note,is_custom,created_at",
         ),
         ("link_tags", "short_link_id,name"),
+        (
+            "ip_locations",
+            "ip,country,region,city,status,attempts,updated_at,next_attempt",
+        ),
         (
             "visits",
             "id,short_link_id,visited_at,ip,user_agent,referrer_domain,device,browser,is_bot",

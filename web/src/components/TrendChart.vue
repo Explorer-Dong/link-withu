@@ -1,16 +1,17 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { number } from "../state";
 const props = defineProps({
   points: { type: Array, default: () => [] },
-  label: { type: String, default: "访问趋势" },
+  label: { type: String, default: "访问量趋势" },
 });
 const container = ref(null),
-  width = ref(920);
+  width = ref(920),
+  activeIndex = ref(null);
 let observer;
 onMounted(() => {
   observer = new ResizeObserver(([entry]) => {
-    width.value = Math.max(280, entry.contentRect.width);
+    width.value = Math.max(1, entry.contentRect.width);
   });
   observer.observe(container.value);
 });
@@ -21,9 +22,11 @@ const xy = computed(() =>
   props.points.map((p, i) => ({
     ...p,
     x:
-      left.value +
-      (i / Math.max(props.points.length - 1, 1)) *
-        (width.value - left.value - 30),
+      props.points.length === 1
+        ? (width.value + left.value - 30) / 2
+        : left.value +
+          (i / Math.max(props.points.length - 1, 1)) *
+            (width.value - left.value - 30),
     y: 180 - (p.count / max.value) * 145,
   })),
 );
@@ -38,13 +41,61 @@ const labels = computed(() =>
     [0, Math.floor((xy.value.length - 1) / 2), xy.value.length - 1].includes(i),
   ),
 );
+const activePoint = computed(() => xy.value[activeIndex.value] || null);
+const tooltipStyle = computed(() => {
+  const point = activePoint.value;
+  if (!point) return {};
+  const position = (point.x / width.value) * 100;
+  const above = point.y > 110;
+  return {
+    left: `${position}%`,
+    top: `${point.y + (above ? -16 : 16)}px`,
+    transform: `translate(-${position}%, ${above ? "-100%" : "0"})`,
+  };
+});
+const particles = Array.from({ length: 8 }, (_, n) => ({
+  x: Math.cos((n * Math.PI) / 4) * (19 + (n % 3) * 5),
+  y: Math.sin((n * Math.PI) / 4) * (19 + (n % 3) * 5),
+}));
+function hover(event) {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  const x = ((event.clientX - bounds.left) * width.value) / bounds.width;
+  const index = Math.round(
+    ((x - left.value) / (width.value - left.value - 30)) *
+      (xy.value.length - 1),
+  );
+  activeIndex.value = Math.max(0, Math.min(xy.value.length - 1, index));
+}
+function move(direction) {
+  activeIndex.value = Math.max(
+    0,
+    Math.min(xy.value.length - 1, (activeIndex.value ?? 0) + direction),
+  );
+}
+watch(
+  () => props.points,
+  () => (activeIndex.value = null),
+);
 </script>
 <template>
-  <div ref="container" class="trend-chart">
+  <div
+    ref="container"
+    class="trend-chart"
+    tabindex="0"
+    aria-label="访问量趋势，使用左右方向键查看日期"
+    @keydown.right.prevent="move(1)"
+    @keydown.left.prevent="move(-1)"
+    @keydown.esc="activeIndex = null"
+    @focus="activeIndex = 0"
+    @blur="activeIndex = null"
+  >
     <svg
       :viewBox="`0 0 ${width} 220`"
       role="img"
-      :aria-label="`${label}访问趋势，总计 ${points.reduce((n, p) => n + p.count, 0)} 次`"
+      :aria-label="`${label}，总计 ${points.reduce((n, p) => n + p.count, 0)} 次访问`"
+      @pointermove="hover"
+      @pointerdown="hover"
+      @pointerleave="activeIndex = null"
     >
       <defs>
         <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
@@ -82,6 +133,7 @@ const labels = computed(() =>
       <circle
         v-for="p in xy"
         :key="p.date"
+        class="chart-point"
         :cx="p.x"
         :cy="p.y"
         :r="points.length > 30 ? 2 : 3.5"
@@ -112,6 +164,71 @@ const labels = computed(() =>
             : p.date.slice(5).replace("-", "/")
         }}
       </text>
+      <g
+        v-if="activePoint"
+        class="chart-active"
+        :key="activePoint.date"
+        aria-hidden="true"
+      >
+        <line
+          :x1="activePoint.x"
+          :x2="activePoint.x"
+          y1="25"
+          y2="180"
+          stroke="var(--accent)"
+          stroke-opacity=".35"
+          stroke-dasharray="4 4"
+        />
+        <circle
+          class="chart-point-halo"
+          :cx="activePoint.x"
+          :cy="activePoint.y"
+          r="12"
+          fill="var(--accent)"
+          fill-opacity=".12"
+        />
+        <g :transform="`translate(${activePoint.x}, ${activePoint.y})`">
+          <circle
+            v-for="(particle, index) in particles"
+            :key="index"
+            class="chart-particle"
+            cx="0"
+            cy="0"
+            :r="index % 2 ? 1.5 : 2.3"
+            fill="var(--accent)"
+            :style="{ '--dx': `${particle.x}px`, '--dy': `${particle.y}px` }"
+          />
+        </g>
+        <circle
+          :cx="activePoint.x"
+          :cy="activePoint.y"
+          r="5"
+          fill="var(--accent)"
+          stroke="var(--surface)"
+          stroke-width="2"
+        />
+      </g>
     </svg>
+    <div
+      v-if="activePoint"
+      role="tooltip"
+      class="chart-tooltip"
+      :style="tooltipStyle"
+    >
+      <span
+        >{{ activePoint.date
+        }}<template
+          v-if="
+            activePoint.end_date && activePoint.end_date !== activePoint.date
+          "
+        >
+          至 {{ activePoint.end_date }}</template
+        ></span
+      >
+      <strong
+        ><i class="status-dot"></i>{{ number(activePoint.count)
+        }}<small> 次访问</small></strong
+      >
+    </div>
   </div>
 </template>

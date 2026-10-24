@@ -19,6 +19,7 @@ use utoipa::OpenApi;
         api::redirect,
         api::backup,
         analytics::analytics,
+        analytics::breakdown,
         analytics::export,
         restore::receive
     ),
@@ -29,6 +30,7 @@ pub fn document(c: &Config) -> Value {
     let mut doc = ApiDoc::openapi();
     doc.info.title = c.app_name.clone();
     doc.info.version = VERSION.into();
+    doc.info.description = Some("短链管理、本地访问统计与在线 IP 地理位置解析。位置结果缓存在本地；访问明细、位置排行、CSV 和 JSON 备份共享该缓存。".into());
     let mut doc = serde_json::to_value(doc).expect("OpenAPI serialization");
     doc["components"]["securitySchemes"] = json!({"bearer_auth":{"type":"http","scheme":"bearer"}});
     doc

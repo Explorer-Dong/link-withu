@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
+import PageHeading from "../components/PageHeading.vue";
 import Icon from "../components/Icon.vue";
 import Modal from "../components/Modal.vue";
 import { api, download } from "../api/links";
@@ -129,9 +130,7 @@ async function restore() {
 onMounted(load);
 </script>
 <template>
-  <div class="page-heading">
-    <div><h1>设置</h1></div>
-  </div>
+  <PageHeading title="设置" />
   <p v-if="error" class="error-message" role="alert">
     {{ error }} <button class="text-btn" @click="load">重试</button>
   </p>
@@ -238,9 +237,6 @@ onMounted(load);
             ><small>数据库大小</small>
           </div>
         </div>
-        <p class="muted small">
-          完整 JSON 备份，包含短链、标签、访问记录与站点设置。
-        </p>
         <div class="backup-actions">
           <button
             class="btn primary"
@@ -279,15 +275,15 @@ onMounted(load);
           <span>存储</span><strong>SQLite</strong>
         </div>
         <div class="setting-info-row">
-          <span>开源协议</span><strong>MIT</strong>
+          <span>开源地址</span>
+          <a
+            class="source-link"
+            href="https://github.com/Explorer-Dong/link-withu"
+            target="_blank"
+            rel="noreferrer"
+            >https://github.com/Explorer-Dong/link-withu</a
+          >
         </div>
-        <a
-          class="text-btn"
-          href="https://github.com/Explorer-Dong/link-withu"
-          target="_blank"
-          rel="noreferrer"
-          >GitHub <Icon name="arrow" :size="15"
-        /></a>
       </section>
     </div>
   </div>

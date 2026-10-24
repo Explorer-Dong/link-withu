@@ -38,6 +38,7 @@ export default defineConfig({
       DATABASE_URL: `sqlite:///${database}`,
       BASE_URL: "http://127.0.0.1:5202",
       TZ: "Asia/Shanghai",
+      GEOIP_API_URL: "",
       FRONTEND_DIST: resolve("dist"),
     },
   },

@@ -1,4 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f38020" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+<svg xmlns="http://www.w3.org/2000/svg" width="216" height="216" viewBox="0 0 216 216" fill="none">
+  <style>
+    .lw-ink { fill: #25282d; }
+    @media (prefers-color-scheme: dark) { .lw-ink { fill: #f4f3f1; } }
+  </style>
+  <g transform="translate(1 34)">
+    <path class="lw-ink" d="M12 10Q9 7 9 12V110Q9 115 13 119L30 135Q33 138 38 138H84L66 106H47Q41 106 41 100V38Q41 33 37 30Z"/>
+    <path fill="#f38020" d="M91 52Q97 45 101 54L122 105L96 136L71 85Q68 80 73 74Z"/>
+    <path fill="#f38020" d="M174 50H202Q206 50 204 54L173 132L153 83L168 54Q170 50 174 50Z"/>
+    <path class="lw-ink" d="M99 50H130Q136 50 138 56L168 128Q172 138 162 138H139Q132 138 130 132Z"/>
+  </g>
 </svg>

@@ -12,5 +12,6 @@ services:
       APP_NAME: ${APP_NAME:-Link WithU}
       RANDOM_CODE_LENGTH: ${RANDOM_CODE_LENGTH:-6}
       TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-0}
+      GEOIP_API_URL: ${GEOIP_API_URL-https://ipwho.is/}
     volumes:
       - ./data:/proj/data

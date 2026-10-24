@@ -384,8 +384,9 @@ fn scoped_csv_exports_keep_real_records_and_escape_visitor_formulas() {
         .collect();
     assert_eq!(records.len(), 1);
     assert_eq!(&records[0][0], "csv-one");
-    assert_eq!(&records[0][3], "blog.example.org");
-    assert_eq!(&records[0][7], "'=FORMULA()");
+    assert_eq!(&records[0][3], "内网");
+    assert_eq!(&records[0][4], "blog.example.org");
+    assert_eq!(&records[0][8], "'=FORMULA()");
     let text = s
         .get("/api/analytics/export?kind=links&tag=chosen")
         .text()

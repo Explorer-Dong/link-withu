@@ -2,6 +2,7 @@ mod analytics;
 mod api;
 mod config;
 mod db;
+mod geolocation;
 mod models;
 mod openapi;
 mod restore;
@@ -139,6 +140,18 @@ struct Job {
 #[derive(Clone)]
 struct Worker(mpsc::SyncSender<Job>);
 impl Worker {
+    async fn value(
+        &self,
+        action: impl FnOnce(&Connection) -> Result<Value> + Send + 'static,
+    ) -> Result<Value> {
+        let reply = self.call(move |conn| action(conn).map(Reply::json)).await?;
+        match reply.body {
+            Payload::Bytes(bytes) => {
+                serde_json::from_slice(&bytes).map_err(|_| error(500, "工作线程结果无效"))
+            }
+            Payload::File(_) => unreachable!("JSON worker result"),
+        }
+    }
     fn start(config: &Config, write: bool) -> Self {
         let conn = db::connect(config).expect("open database");
         let (sender, receiver) = mpsc::sync_channel::<Job>(64);
@@ -440,6 +453,7 @@ async fn main() {
         admission: Semaphore::new(64),
         restore: Semaphore::new(1),
     });
+    tokio::spawn(geolocation::run(app.clone()));
     let address = format!("0.0.0.0:{}", app.config.port);
     let router = Router::new().fallback(handle).with_state(app);
     let listener = tokio::net::TcpListener::bind(&address)

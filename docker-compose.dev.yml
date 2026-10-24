@@ -12,6 +12,7 @@ services:
       APP_NAME: ${APP_NAME:-Link WithU}
       RANDOM_CODE_LENGTH: ${RANDOM_CODE_LENGTH:-6}
       TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-0}
+      GEOIP_API_URL: ${GEOIP_API_URL-https://ipwho.is/}
       DATABASE_URL: sqlite:////proj/api/short_links.db
     ports:
       - "5201:5201"

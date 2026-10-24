@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://www.rust-lang.org/">
-    <img src="https://img.shields.io/badge/rust-1.99.1-D34516?logo=rust&logoColor=white" alt="Rust 1.99.1"/>
+    <img src="https://img.shields.io/badge/rust-1.99.1-D34516" alt="Rust 1.99.1"/>
   </a>
   <a href="https://hub.docker.com/r/xwithu/link-withu/tags">
     <img src="https://img.shields.io/docker/v/xwithu/link-withu?color=blue&label=docker" alt="Docker Image Version"/>
@@ -18,10 +18,10 @@
   </a>
 </p>
 
-- **极简的管理界面**：零广告，卡片式设计，不被冗余信息淹没。
-- **直观的访问统计**：什么时候、怎么访问、来自哪里，一目了然。
-- **极致的内存占用**：后端由 Rust 驱动，服务在静默状态平均内存占用仅 2MB。
-- **便捷的部署方案**：支持 Docker 一键私有化部署与全量数据的导出与导入。
+- **极简的管理界面**：零广告，卡片式设计，不被冗余信息淹没，操作更简洁。
+- **直观的访问统计**：访问趋势、访问来源、点击排名一目了然，分析更直观。
+- **极致的内存占用**：Rust 驱动，平均内存占用仅 4MB，性能没要求。
+- **便捷的部署方案**：Docker 一键私有化部署，支持全量数据的导出与导入，迁移更便捷。
 
 ## 快速开始
 
@@ -64,77 +64,65 @@ docker compose up -d
 
 ## 界面截图
 
-### 桌面端
-
+<details>
+<summary>桌面端</summary>
 <div align="center">
 <table>
 <tr>
-<td align="center"><b>访问统计</b></td>
-<td align="center"><b>链接管理</b></td>
+<td align="center"><b>首页</b></td>
+<td align="center"><b>链接</b></td>
 <td align="center"><b>设置</b></td>
 </tr>
 <tr>
-<td><picture>
-<source media="(prefers-color-scheme: dark)" srcset=".github/assets/analytics-dark.png">
-<source media="(prefers-color-scheme: light)" srcset=".github/assets/analytics.png">
-<img src=".github/assets/analytics.png" alt="访问统计" width="400">
-</picture></td>
-<td><picture>
-<source media="(prefers-color-scheme: dark)" srcset=".github/assets/link-withu-dark.png">
-<source media="(prefers-color-scheme: light)" srcset=".github/assets/link-withu.png">
-<img src=".github/assets/link-withu.png" alt="链接管理" width="400">
-</picture></td>
-<td><picture>
-<source media="(prefers-color-scheme: dark)" srcset=".github/assets/settings-dark.png">
-<source media="(prefers-color-scheme: light)" srcset=".github/assets/settings.png">
-<img src=".github/assets/settings.png" alt="设置" width="400">
-</picture></td>
+<td>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/analytics.png#gh-light-mode-only"><img src=".github/assets/analytics.png" alt="首页（浅色）" width="400"></a>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/analytics-dark.png#gh-dark-mode-only"><img src=".github/assets/analytics-dark.png" alt="首页（深色）" width="400"></a>
+</td>
+<td>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/link-withu.png#gh-light-mode-only"><img src=".github/assets/link-withu.png" alt="链接（浅色）" width="400"></a>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/link-withu-dark.png#gh-dark-mode-only"><img src=".github/assets/link-withu-dark.png" alt="链接（深色）" width="400"></a>
+</td>
+<td>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/settings.png#gh-light-mode-only"><img src=".github/assets/settings.png" alt="设置（浅色）" width="400"></a>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/settings-dark.png#gh-dark-mode-only"><img src=".github/assets/settings-dark.png" alt="设置（深色）" width="400"></a>
+</td>
 </tr>
 </table>
 </div>
+</details>
 
-### 手机端
 
+<details>
+<summary>移动端</summary>
 <div align="center">
 <table>
 <tr>
-<td align="center"><b>访问统计</b></td>
-<td align="center"><b>链接管理</b></td>
+<td align="center"><b>首页</b></td>
+<td align="center"><b>链接</b></td>
 <td align="center"><b>设置</b></td>
 </tr>
 <tr>
-<td><picture>
-<source media="(prefers-color-scheme: dark)" srcset=".github/assets/analytics-mobile-dark.png">
-<source media="(prefers-color-scheme: light)" srcset=".github/assets/analytics-mobile.png">
-<img src=".github/assets/analytics-mobile.png" alt="手机端访问统计" width="180">
-</picture></td>
-<td><picture>
-<source media="(prefers-color-scheme: dark)" srcset=".github/assets/links-mobile-dark.png">
-<source media="(prefers-color-scheme: light)" srcset=".github/assets/links-mobile.png">
-<img src=".github/assets/links-mobile.png" alt="手机端链接管理" width="180">
-</picture></td>
-<td><picture>
-<source media="(prefers-color-scheme: dark)" srcset=".github/assets/settings-mobile-dark.png">
-<source media="(prefers-color-scheme: light)" srcset=".github/assets/settings-mobile.png">
-<img src=".github/assets/settings-mobile.png" alt="手机端设置" width="180">
-</picture></td>
+<td>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/analytics-mobile.png#gh-light-mode-only"><img src=".github/assets/analytics-mobile.png" alt="手机端首页（浅色）" width="180"></a>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/analytics-mobile-dark.png#gh-dark-mode-only"><img src=".github/assets/analytics-mobile-dark.png" alt="手机端首页（深色）" width="180"></a>
+</td>
+<td>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/links-mobile.png#gh-light-mode-only"><img src=".github/assets/links-mobile.png" alt="手机端链接（浅色）" width="180"></a>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/links-mobile-dark.png#gh-dark-mode-only"><img src=".github/assets/links-mobile-dark.png" alt="手机端链接（深色）" width="180"></a>
+</td>
+<td>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/settings-mobile.png#gh-light-mode-only"><img src=".github/assets/settings-mobile.png" alt="手机端设置（浅色）" width="180"></a>
+<a href="https://github.com/Explorer-Dong/link-withu/blob/main/.github/assets/settings-mobile-dark.png#gh-dark-mode-only"><img src=".github/assets/settings-mobile-dark.png" alt="手机端设置（深色）" width="180"></a>
+</td>
 </tr>
 </table>
 </div>
+</details>
 
 ## 参与贡献
 
-一键启动容器化开发环境：
-
-```bash
-docker compose -f docker-compose.dev.yml up --build
-```
-
-- 前端 `http://127.0.0.1:5173`，支持热重载。
-- 后端 `http://127.0.0.1:5201`，支持热重载。接口文档 `http://127.0.0.1:5201/docs`。
-
-技术栈：前端 Vue，后端 Axum，数据库 SQLite。
+[AGENTS.md](./AGENTS.md)
 
 ## 开源协议
 
-本项目遵循 [MIT](./LICENSE) 协议。
+[MIT](./LICENSE)

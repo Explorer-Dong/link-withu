@@ -63,6 +63,7 @@ impl Server {
             .env("APP_NAME", "Link WithU")
             .env("RANDOM_CODE_LENGTH", "6")
             .env("BASE_URL", "http://testserver")
+            .env("GEOIP_API_URL", "")
             .env(
                 "FRONTEND_DIST",
                 PathBuf::from(env!("CARGO_MANIFEST_DIR"))

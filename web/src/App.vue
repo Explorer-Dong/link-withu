@@ -48,21 +48,19 @@ watch(session, updateTags);
       <nav class="main-nav" aria-label="主导航">
         <router-link
           to="/"
-          aria-label="访问统计"
-          title="访问统计"
+          aria-label="首页"
+          title="首页"
           :class="{ active: route.path === '/' }"
         >
-          <Icon name="home" :size="24" /><span class="nav-label">访问统计</span>
+          <Icon name="home" :size="24" /><span class="nav-label">首页</span>
         </router-link>
         <router-link
           to="/links"
-          aria-label="链接管理"
-          title="链接管理"
+          aria-label="链接"
+          title="链接"
           :class="{ active: route.path === '/links' }"
         >
-          <Icon name="links" :size="24" /><span class="nav-label"
-            >链接管理</span
-          >
+          <Icon name="links" :size="24" /><span class="nav-label">链接</span>
         </router-link>
         <router-link
           to="/settings"

@@ -475,6 +475,7 @@ fn generated_openapi_versions_routes_and_spa_boundaries() {
         ("/api/links/{short_code}", "delete"),
         ("/r/{short_code}", "get"),
         ("/api/analytics", "get"),
+        ("/api/analytics/breakdown", "get"),
         ("/api/analytics/export", "get"),
         ("/api/admin/settings", "get"),
         ("/api/admin/settings", "put"),

@@ -6,6 +6,7 @@ const props = defineProps({
   items: { type: Array, default: () => [] },
   total: { default: 0 },
 });
+defineEmits(["open"]);
 const names = {
   unknown: "未知",
   desktop: "桌面设备",
@@ -17,8 +18,15 @@ const max = computed(() => Math.max(1, ...props.items.map((p) => p.count)));
 <template>
   <section class="card breakdown">
     <div class="section-heading">
-      <h2>{{ title }}</h2>
-      <span class="muted small">访问占比</span>
+      <h2>
+        <button
+          class="section-title-button"
+          :aria-label="title"
+          @click="$emit('open')"
+        >
+          {{ title }}
+        </button>
+      </h2>
     </div>
     <div v-if="!items.length" class="mini-empty">暂无访问数据</div>
     <div v-for="item in items" :key="item.name" class="breakdown-row">

@@ -33,8 +33,13 @@ async function login() {
 <template>
   <div class="login-page">
     <div class="login-brand">
-      <span class="brand-logo"><Icon name="link" :size="26" /></span
-      >{{ site.app_name }}
+      <img
+        class="brand"
+        src="/favicon.svg?v=lw"
+        alt=""
+        width="54"
+        height="54"
+      />{{ site.app_name }}
     </div>
     <section class="login-card">
       <h1>管理员登录</h1>

@@ -62,6 +62,10 @@ pub fn dispatch(conn: &Connection, c: &Config, i: Input) -> Result<Reply> {
             limited_query(&i)?;
             crate::analytics::export(conn, c, &i)
         }
+        ("GET", "/api/analytics/breakdown") => {
+            limited_query(&i)?;
+            crate::analytics::breakdown(conn, c, &i)
+        }
         ("GET", "/api/admin/backup") => backup(conn, c),
         ("GET", p) if p.starts_with("/r/") => redirect(conn, c, &i),
         ("GET", p) if p.starts_with("/api/links/stats/") => visits(conn, c, &i),
@@ -297,6 +301,7 @@ pub fn redirect(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
             json!(bot),
         ],
     )?;
+    crate::geolocation::enqueue(conn, &ip)?;
     let location =
         percent_encoding::utf8_percent_encode(db::text(&link, "original_url")?, URL_ESCAPES)
             .to_string();
@@ -307,28 +312,33 @@ pub fn redirect(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     })
 }
 
-#[utoipa::path(get,path="/api/links/stats/{short_code}",tag="links",params(("short_code"=String,Path),("skip"=Option<i64>,Query,minimum=0,example=0),("limit"=Option<i64>,Query,minimum=1,maximum=200,example=50),("exclude_bots"=Option<bool>,Query,example=false)),responses((status=200,body=crate::models::VisitStats),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+#[utoipa::path(get,path="/api/links/stats/{short_code}",tag="links",params(("short_code"=String,Path),("skip"=Option<i64>,Query,minimum=0,example=0),("limit"=Option<i64>,Query,minimum=1,maximum=200,example=50),("exclude_bots"=Option<bool>,Query,example=false),("start_date"=Option<String>,Query,format=Date),("end_date"=Option<String>,Query,format=Date)),responses((status=200,body=crate::models::VisitStats),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn visits(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let p = i.path.as_str();
     let link = db::link(conn, &p[17..])?;
     let skip = i.number("skip", 0, 0, i64::MAX)?;
     let limit = i.number("limit", 50, 1, 200)?;
-    let where_sql = if i.boolean("exclude_bots")? {
-        "short_link_id=? AND is_bot=0"
-    } else {
-        "short_link_id=?"
-    };
+    let (mut where_sql, mut params) = crate::analytics::visit_filter(c, i)?;
+    where_sql.push_str(" AND s.id=?");
+    params.push(link["id"].clone());
+    let joined = format!(
+        "FROM visits v JOIN short_links s ON s.id=v.short_link_id {}",
+        crate::geolocation::JOIN
+    );
     let total = db::scalar(
         conn,
-        &format!("SELECT COUNT(*) FROM visits WHERE {where_sql}"),
-        &[link["id"].clone()],
+        &format!("SELECT COUNT(*) {joined} WHERE {where_sql}"),
+        &params,
     )?;
+    params.extend([json!(limit), json!(skip)]);
     let mut visits = db::rows(
         conn,
         &format!(
-            "SELECT visited_at,ip,user_agent,referrer_domain,device,browser,is_bot FROM visits WHERE {where_sql} ORDER BY visited_at DESC,id DESC LIMIT ? OFFSET ?"
+            "SELECT v.visited_at,v.ip,v.user_agent,v.referrer_domain,v.device,v.browser,v.is_bot,{},{} AS location {joined} WHERE {where_sql} ORDER BY v.visited_at DESC,v.id DESC LIMIT ? OFFSET ?",
+            crate::geolocation::FIELDS,
+            crate::geolocation::LOCATION
         ),
-        &[link["id"].clone(), json!(limit), json!(skip)],
+        &params,
     )?;
     for visit in &mut visits {
         visit["visited_at"] = json!(db::iso(db::text(visit, "visited_at")?, true)?);
@@ -448,7 +458,16 @@ pub fn backup(conn: &Connection, c: &Config) -> Result<Reply> {
         if table == "visits" {
             output.write_all(b"],\"visits\":[")?;
         }
-        let mut stmt = conn.prepare(&format!("SELECT * FROM {table} ORDER BY id"))?;
+        let query = if table == "visits" {
+            format!(
+                "SELECT v.*,{} FROM visits v {} ORDER BY v.id",
+                crate::geolocation::FIELDS,
+                crate::geolocation::JOIN
+            )
+        } else {
+            format!("SELECT * FROM {table} ORDER BY id")
+        };
+        let mut stmt = conn.prepare(&query)?;
         let names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
         let mut rows = stmt.query([])?;
         let mut first = true;

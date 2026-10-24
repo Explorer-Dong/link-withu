@@ -1,6 +1,6 @@
 [package]
 name = "link-withu"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 description = "A compact URL shortener with SQLite storage."
 license = "MIT"
@@ -27,6 +27,7 @@ csv = "1"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 utoipa = "6"
 dotenvy = "0.15"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 
 [dev-dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json"] }

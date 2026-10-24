@@ -34,6 +34,11 @@ fn old_schema_migration_preserves_history_and_is_repeatable() {
     assert_eq!(visits[0]["device"], "desktop");
     assert_eq!(visits[0]["browser"], "Chrome");
     assert_eq!(visits[1]["is_bot"], true);
+    assert_eq!(visits[0]["country"], "内网");
+    assert_eq!(
+        s.json("/api/links/stats/旧链接")["visits"][0]["location"],
+        "内网"
+    );
     assert_eq!(s.restore(&s.json("/api/admin/backup")).status(), 200);
     assert_eq!(s.delete("/api/links/旧链接").status(), 204);
     assert_eq!(s.json("/api/admin/backup")["visits"], json!([]));
@@ -62,6 +67,9 @@ fn invalid_environment_is_rejected_without_opening_database() {
         ("PORT", "0"),
         ("BASE_URL", "http:example.org"),
         ("DATABASE_URL", "postgresql://localhost/db"),
+        ("GEOIP_API_URL", "file:///tmp/database"),
+        ("GEOIP_API_URL", "https://user:password@example.com/"),
+        ("GEOIP_API_URL", "https://example.com/?secret=value"),
     ] {
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("invalid.db");

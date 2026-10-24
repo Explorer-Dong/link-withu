@@ -1,7 +1,16 @@
 import { expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
-import { test, resetData, login, assertNoOverflow } from "./helpers";
+import {
+  test,
+  resetData,
+  login,
+  assertNoOverflow,
+  selectRange,
+  navigate,
+  adminHeaders,
+  seedAnalytics,
+} from "./helpers";
 
 test.beforeEach(resetData);
 
@@ -44,6 +53,44 @@ test("independent login, protected deep links, themes and logout", async ({
   expect(errors).toEqual([]);
 });
 
+test("page logos, composer layout and source link work in both themes", async ({
+  page,
+}) => {
+  await login(page);
+  await expect(page.locator(".page-title img")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "首页", exact: true }),
+  ).toBeVisible();
+  await navigate(page, "链接");
+  await expect(
+    page.getByRole("heading", { name: "链接", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".composer h2")).toHaveCount(0);
+  await expect(page.locator(".url-create > .composer-options")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "创建短链", exact: true }).locator("svg"),
+  ).toHaveCount(0);
+  await assertNoOverflow(page);
+  await navigate(page, "设置");
+  await expect(page.locator(".page-title img")).toBeVisible();
+  await expect(page.locator(".source-link")).toHaveAttribute(
+    "href",
+    "https://github.com/Explorer-Dong/link-withu",
+  );
+  await expect(page.getByText("开源协议", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText("完整 JSON 备份，包含短链、标签、访问记录与站点设置。", {
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "深色", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await assertNoOverflow(page);
+  await navigate(page, "首页");
+  await expect(page.locator(".trend-card")).toBeVisible();
+  await assertNoOverflow(page);
+});
+
 test("create, search, tag, edit, analytics, bot filter and delete", async ({
   page,
   request,
@@ -52,19 +99,19 @@ test("create, search, tag, edit, analytics, bot filter and delete", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   await login(page);
   await expect(
-    page.getByRole("heading", { name: "访问统计", exact: true }),
+    page.getByRole("heading", { name: "首页", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "切换主题" })).toHaveCount(0);
   await expect(
     page.getByText(/统计时区|按 .* 统计|浏览器本地时间/),
   ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "全部时间", exact: true }),
-  ).toHaveClass(/selected/);
+  await expect(page.locator(".date-range-picker > summary")).toHaveText(
+    "选择时间区间",
+  );
   await expect(page.getByRole("combobox", { name: "统计标签" })).toHaveCount(0);
   await page
     .getByRole("navigation", { name: "主导航" })
-    .getByRole("link", { name: "链接管理" })
+    .getByRole("link", { name: "链接" })
     .click();
   await expect(page).toHaveURL("/links");
   await page.reload();
@@ -125,28 +172,28 @@ test("create, search, tag, edit, analytics, bot filter and delete", async ({
     headers: { "user-agent": "Googlebot/2.1" },
   });
   await card.getByRole("link", { name: `访问统计：${code}` }).click();
-  await expect(page.getByRole("heading", { name: "访问趋势" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "访问量趋势" })).toBeVisible();
   await expect(
     page.getByRole("cell", { name: "blog.example.org", exact: true }),
   ).toBeVisible();
   await page.getByRole("combobox", { name: "统计标签" }).selectOption("已更新");
-  await expect(page.getByRole("heading", { name: "访问趋势" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "访问量趋势" })).toBeVisible();
   await expect(page.getByRole("alert")).not.toBeVisible();
   await page.getByLabel("排除疑似机器人").check();
   await expect(
     page.getByRole("cell", { name: "疑似机器人", exact: true }),
   ).not.toBeVisible();
-  await page.getByRole("button", { name: "近 7 天", exact: true }).click();
+  await selectRange(page, 7);
   await page.screenshot({
     path: testInfo.outputPath("analytics.png"),
     fullPage: true,
   });
   await assertNoOverflow(page);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "访问趋势" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "访问量趋势" })).toBeVisible();
   await page
     .getByRole("navigation", { name: "主导航" })
-    .getByRole("link", { name: "链接管理" })
+    .getByRole("link", { name: "链接" })
     .click();
   await page
     .getByRole("article")
@@ -208,11 +255,11 @@ test("settings save, full data export and validated restore", async ({
   await assertNoOverflow(page);
   await page
     .getByRole("navigation", { name: "主导航" })
-    .getByRole("link", { name: "链接管理" })
+    .getByRole("link", { name: "链接" })
     .click();
-  await expect(page).toHaveTitle("链接管理 · 我的短链空间");
+  await expect(page).toHaveTitle("链接 · 我的短链空间");
   await page.reload();
-  await expect(page).toHaveTitle("链接管理 · 我的短链空间");
+  await expect(page).toHaveTitle("链接 · 我的短链空间");
   await page
     .getByRole("navigation", { name: "主导航" })
     .getByRole("link", { name: "设置" })
@@ -223,6 +270,45 @@ test("settings save, full data export and validated restore", async ({
   await page.reload();
   await expect(page).toHaveTitle("登录 · 我的短链空间");
   await expect(page.locator(".login-brand")).toHaveText("我的短链空间");
+});
+
+test("long referrers and site names fit a narrow screen", async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await seedAnalytics(request);
+  const headers = await adminHeaders(request);
+  const snapshot = await (
+    await request.get("/api/admin/backup", { headers })
+  ).json();
+  for (const visit of snapshot.visits) {
+    visit.referrer_domain = "long-source-".repeat(12) + "example.com";
+  }
+  expect(
+    (
+      await request.post("/api/admin/restore", {
+        headers: { ...headers, "X-Confirm-Restore": "RESTORE" },
+        data: snapshot,
+      })
+    ).ok(),
+  ).toBe(true);
+  await login(page);
+  await expect(page.locator(".breakdown-name").first()).toContainText(
+    "long-source-",
+  );
+  await assertNoOverflow(page);
+  await page.getByRole("button", { name: "访问来源", exact: true }).click();
+  await expect(page.getByRole("dialog").locator(".detail-row")).toHaveCount(1);
+  await assertNoOverflow(page);
+  await page.keyboard.press("Escape");
+  await navigate(page, "设置");
+  await page.getByLabel("站点名称", { exact: true }).fill("A".repeat(60));
+  await page.getByRole("button", { name: "保存设置", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("设置已保存");
+  await page.getByRole("button", { name: "退出登录", exact: true }).click();
+  await expect(page.locator(".login-brand")).toContainText("A".repeat(60));
+  await assertNoOverflow(page);
 });
 
 test("ten links per page, filter resets and deleting the last page", async ({
@@ -343,7 +429,7 @@ test("a delayed unauthorized response cannot clear a new login", async ({
   });
   await page
     .getByRole("navigation", { name: "主导航" })
-    .getByRole("link", { name: "链接管理" })
+    .getByRole("link", { name: "链接" })
     .click();
   await intercepted;
   await page
@@ -357,7 +443,7 @@ test("a delayed unauthorized response cannot clear a new login", async ({
     .fill("browser-test-only");
   await page.getByRole("button", { name: "登录工作空间" }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading", { name: "访问趋势" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "访问量趋势" })).toBeVisible();
   const sessionBefore = await page.evaluate(() =>
     localStorage.getItem("link-withu-admin-session"),
   );

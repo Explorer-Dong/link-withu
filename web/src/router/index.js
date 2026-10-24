@@ -12,12 +12,12 @@ const router = createRouter({
     {
       path: "/",
       component: () => import("../views/Analytics.vue"),
-      meta: { title: "访问统计" },
+      meta: { title: "首页" },
     },
     {
       path: "/links",
       component: () => import("../views/Home.vue"),
-      meta: { title: "链接管理" },
+      meta: { title: "链接" },
     },
     {
       path: "/settings",

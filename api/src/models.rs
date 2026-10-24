@@ -110,6 +110,15 @@ pub struct BackupVisit {
     #[schema(max_length = 45)]
     pub ip: Option<String>,
     #[serde(default)]
+    #[schema(max_length = 100)]
+    pub country: String,
+    #[serde(default)]
+    #[schema(max_length = 100)]
+    pub region: String,
+    #[serde(default)]
+    #[schema(max_length = 100)]
+    pub city: String,
+    #[serde(default)]
     #[schema(max_length = 8192)]
     pub user_agent: Option<String>,
     #[serde(default)]
@@ -213,6 +222,11 @@ pub struct VisitDetails {
     #[schema(format=DateTime)]
     pub visited_at: String,
     pub ip: Option<String>,
+    pub country: String,
+    pub region: String,
+    pub city: String,
+    /// IP 估算地址，优先展示国家与城市；缺少城市时使用地区。
+    pub location: String,
     pub user_agent: Option<String>,
     pub referrer_domain: Option<String>,
     pub device: String,
@@ -233,17 +247,20 @@ pub struct Analytics {
     pub referrers: Vec<Count>,
     pub devices: Vec<Count>,
     pub browsers: Vec<Count>,
+    pub locations: Vec<Count>,
     pub tags: Vec<TagCount>,
 }
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct Summary {
     pub links: i64,
+    pub active_links: i64,
     pub total_visits: i64,
     pub today: i64,
     pub last_7_days: i64,
     pub last_30_days: i64,
     pub period_visits: i64,
     pub suspected_bots: i64,
+    pub pending_locations: i64,
 }
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct Trend {
@@ -268,4 +285,16 @@ pub struct TagCount {
     pub name: String,
     pub link_count: i64,
     pub count: i64,
+}
+#[derive(Serialize, Deserialize, ToSchema)]
+#[serde(untagged)]
+pub enum BreakdownItem {
+    Link(RankedLink),
+    Tag(TagCount),
+    Count(Count),
+}
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct BreakdownPage {
+    pub total: i64,
+    pub items: Vec<BreakdownItem>,
 }

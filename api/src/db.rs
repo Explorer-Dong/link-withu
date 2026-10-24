@@ -129,6 +129,21 @@ pub fn init(config: &Config) -> Result<()> {
             }
         }
     }
+    let mut last_ip = String::new();
+    loop {
+        let batch = rows(
+            &conn,
+            "SELECT DISTINCT v.ip FROM visits v WHERE v.ip>? AND NOT EXISTS (SELECT 1 FROM ip_locations g WHERE g.ip=v.ip) ORDER BY v.ip LIMIT 500",
+            &[json!(last_ip)],
+        )?;
+        if batch.is_empty() {
+            break;
+        }
+        for row in batch {
+            last_ip = row["ip"].as_str().unwrap().to_owned();
+            crate::geolocation::enqueue(&conn, &last_ip)?;
+        }
+    }
     conn.execute_batch("COMMIT")?;
     Ok(())
 }

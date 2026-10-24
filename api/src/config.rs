@@ -12,6 +12,7 @@ pub struct Config {
     pub database: String,
     pub frontend: PathBuf,
     pub port: u16,
+    pub geoip_url: Option<url::Url>,
 }
 impl Config {
     pub fn load() -> std::result::Result<Self, String> {
@@ -83,6 +84,24 @@ impl Config {
             )
             .into(),
             port,
+            geoip_url: match env("GEOIP_API_URL", "https://ipwho.is/").trim() {
+                "" => None,
+                value => {
+                    let url = url::Url::parse(value).map_err(|_| "GEOIP_API_URL 地址无效")?;
+                    if !matches!(url.scheme(), "http" | "https")
+                        || url.host_str().is_none()
+                        || !url.username().is_empty()
+                        || url.password().is_some()
+                        || url.query().is_some()
+                        || url.fragment().is_some()
+                    {
+                        return Err(
+                            "GEOIP_API_URL 必须是无认证、查询参数或片段的 HTTP/HTTPS 地址".into(),
+                        );
+                    }
+                    Some(url)
+                }
+            },
         };
         validation::site(&json!({"app_name": config.app_name,"base_url":config.base_url,"random_code_length":config.code_length,"timezone":config.tz_name}))
             .map_err(|e|format!("站点环境变量无效: {}",e.1))?;
