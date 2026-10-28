@@ -684,7 +684,9 @@ fn generated_openapi_versions_routes_and_spa_boundaries() {
     let docs = docs.text().unwrap();
     assert!(docs.contains("@scalar/api-reference@1.75.1/esm.js"));
     assert!(docs.contains("url: '/openapi.json'"));
-    assert_eq!(s.get("/redoc").status(), 200);
+    let redoc = s.get("/redoc");
+    assert_eq!(redoc.status(), 200);
+    assert!(redoc.text().unwrap().contains("href=\"/favicon.svg\""));
     assert_eq!(s.post("/api/links/tags", &json!({})).status(), 405);
     assert_eq!(s.get("/api/not-a-route").status(), 404);
     assert_eq!(s.get("/does-not-exist").status(), 404);

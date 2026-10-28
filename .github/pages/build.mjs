@@ -61,16 +61,17 @@ const html = markdown.renderer
   );
 const nav = (prefix, active) =>
   `<nav class="pages-nav" aria-label="文档导航"><a ${active === "readme" ? 'aria-current="page"' : ""} href="${prefix}">README</a><a ${active === "docs" ? 'aria-current="page"' : ""} href="${prefix}docs/">API</a>${active === "readme" ? toc : ""}</nav>`;
-const head = (title, css) =>
-  `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><link rel="stylesheet" href="${css}"></head><body>`;
-const readmePage = `${head("Link WithU", "style.css")}<div class="pages-layout">${nav("./", "readme")}<main class="pages-readme">${html}</main></div><script>if (matchMedia('(max-width: 720px)').matches) document.querySelector('.pages-toc').removeAttribute('open');</script></body></html>`;
-const docsPage = `${head("Link WithU API", "../style.css")}<div class="pages-api-layout">${nav("../", "docs")}<main class="pages-docs"><form class="pages-server"><label for="deployment-url">部署地址</label><input id="deployment-url" type="url" required placeholder="https://go.example.com"><button type="submit">应用地址</button></form><div id="api-reference">正在加载接口文档…</div></main></div><script type="module" src="../docs.js"></script></body></html>`;
+const head = (title, css, icon) =>
+  `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><link rel="icon" type="image/svg+xml" href="${icon}"><link rel="stylesheet" href="${css}"></head><body>`;
+const readmePage = `${head("Link WithU", "style.css", "favicon.svg")}<div class="pages-layout">${nav("./", "readme")}<main class="pages-readme">${html}</main></div><script>if (matchMedia('(max-width: 720px)').matches) document.querySelector('.pages-toc').removeAttribute('open');</script></body></html>`;
+const docsPage = `${head("Link WithU API", "../style.css", "../favicon.svg")}<div class="pages-api-layout">${nav("../", "docs")}<main class="pages-docs"><form class="pages-server"><label for="deployment-url">部署地址</label><input id="deployment-url" type="url" required placeholder="https://go.example.com"><button type="submit">应用地址</button></form><div id="api-reference">正在加载接口文档…</div></main></div><script type="module" src="../docs.js"></script></body></html>`;
 await mkdir(join(output, "docs"), { recursive: true });
 await cp(join(root, ".github/assets"), join(output, "assets"), {
   recursive: true,
 });
 await cp(join(root, ".github/pages/style.css"), join(output, "style.css"));
 await cp(join(root, ".github/pages/docs.js"), join(output, "docs.js"));
+await cp(join(root, "web/public/favicon.svg"), join(output, "favicon.svg"));
 await Promise.all([
   writeFile(join(output, "index.html"), readmePage),
   writeFile(join(output, "docs/index.html"), docsPage),

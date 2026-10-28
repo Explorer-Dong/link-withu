@@ -41,6 +41,7 @@ test.beforeAll(async () => {
           css: "text/css",
           js: "text/javascript",
           png: "image/png",
+          svg: "image/svg+xml",
         }[extension] || "application/octet-stream",
       );
       response.end(content);
@@ -80,6 +81,15 @@ test("README and API pages render under a project subpath", async ({
     }),
   );
   await page.goto(base);
+  const icon = page.locator('link[rel="icon"]');
+  expect(new URL(await icon.getAttribute("href"), page.url()).href).toBe(
+    `${base}favicon.svg`,
+  );
+  const favicon = await request.get(`${base}favicon.svg`);
+  expect(favicon.headers()["content-type"]).toBe("image/svg+xml");
+  expect(await favicon.body()).toEqual(
+    await readFile(join(root, "web/public/favicon.svg")),
+  );
   await expect(page.getByRole("heading", { name: "Link WithU" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "快速开始" })).toBeVisible();
   const toc = page.locator(".pages-toc");
@@ -117,6 +127,9 @@ test("README and API pages render under a project subpath", async ({
   await expect(dark).toBeVisible();
   await page.getByRole("link", { name: "API", exact: true }).click();
   await expect(page).toHaveURL(`${base}docs/`);
+  expect(new URL(await icon.getAttribute("href"), page.url()).href).toBe(
+    `${base}favicon.svg`,
+  );
   await expect(page.locator("#api-reference")).toHaveText(
     `Link WithU ${version}`,
   );
