@@ -18,10 +18,13 @@
   </a>
 </p>
 
-- **极简的管理界面**：零广告，卡片式设计，不被冗余信息淹没，操作更简洁。
+## 软件特性
+
+- **简约的管理界面**：零广告，卡片式设计，不被冗余信息淹没，操作更简洁。
 - **直观的访问统计**：访问趋势、访问来源、点击排名一目了然，分析更直观。
-- **极致的内存占用**：Rust 驱动，平均内存占用仅 4MB，性能没要求。
+- **极低的内存占用**：Rust 驱动，平均内存占用仅 4MB，性能没要求。
 - **便捷的部署方案**：Docker 一键私有化部署，支持全量数据的导出与导入，迁移更便捷。
+- **全面的接口调用**：服务可基于 API Key 进行接口控制，Agent 集成更快速。
 
 ## 快速开始
 
@@ -61,12 +64,6 @@ docker compose up -d
 | `TRUSTED_PROXY_COUNT` | `int` | `0` | 可信反代层数。Nginx 反代设为 1，并配置 `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`；使用 CDN 再加 1 |
 | `APP_NAME` | `str` | `Link WithU` | 管理面板名称 |
 | `TZ` | `str` | `Asia/Shanghai` | 统计时区，修改后重新创建容器生效 |
-
-## 程序调用
-
-服务提供 HTTP API，支持其他程序及具备 HTTP 工具的 LLM 调用。登录后在设置页生成 API Key，通过 `Authorization: Bearer <API Key>` 调用；重新生成、撤销或修改管理员密码后旧密钥失效。部署后的 `/docs`（Scalar）与 `/redoc` 使用 `/openapi.json` 生成接口文档；文档界面需要连接 jsDelivr。
-
-[在线文档](https://explorer-dong.github.io/link-withu/)可填写部署地址，生成对应的调用命令。
 
 ## 界面截图
 
