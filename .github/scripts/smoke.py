@@ -67,6 +67,7 @@ def main():
     token = request("/api/admin/login", data={"password": os.environ["ADMIN_PASSWORD"]})[
         "token"
     ]
+    api_key = request("/api/admin/api-key", data={}, token=token)["api_key"]
     created = request(
         "/api/links",
         data={
@@ -74,7 +75,7 @@ def main():
             "short_code": "smoke-test",
             "tags": ["smoke"],
         },
-        token=token,
+        token=api_key,
     )
     assert created["short_code"] == "smoke-test"
     try:
@@ -83,17 +84,30 @@ def main():
     except HTTPError as error:
         assert error.code == 302
         assert error.headers["Location"] == "https://example.org/smoke"
-    stats = request("/api/analytics", token=token)
+    stats = request("/api/analytics", token=api_key)
     assert stats["summary"]["total_visits"] == 1
-    snapshot = request("/api/admin/backup", token=token)
+    snapshot = request("/api/admin/backup", token=api_key)
     assert len(snapshot["links"]) == len(snapshot["visits"]) == 1
+    assert api_key not in json.dumps(snapshot)
     restored = request(
         "/api/admin/restore",
         data=snapshot,
-        token=token,
+        token=api_key,
         headers={"X-Confirm-Restore": "RESTORE"},
     )
     assert restored["links"] == restored["visits"] == 1
+    revoke = Request(
+        BASE + "/api/admin/api-key",
+        headers={"Authorization": "Bearer " + token},
+        method="DELETE",
+    )
+    with urlopen(revoke, timeout=5) as response:
+        assert response.status == 204
+    try:
+        request("/api/links", token=api_key)
+        raise AssertionError("Revoked API Key must not authenticate")
+    except HTTPError as error:
+        assert error.code == 401, error.code
     assert request("/api/admin/settings", token=token)["version"] == expected_version
     print(
         f"Production HTTP, frontend assets, auth, redirect, analytics and backup/restore OK ({expected_version})"

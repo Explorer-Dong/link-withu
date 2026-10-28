@@ -187,7 +187,7 @@ Docker 使用固定版本的 `cargo-chef` 将 Rust 依赖编译为独立缓存�
 | 配置与旧库 | `.env` 优先级、环境变量覆盖、默认值、旧数据库 URL、拒绝内存 URI、启动校验、旧表结构补齐、分类回填、重复迁移、SQLite 完整性 | `api/src/config.rs`、`api/tests/migration.rs` |
 | 服务与文档 | 健康检查成功／失败、版本命令、SIGTERM 退出、请求限流及断连恢复、20 个 API 操作清单、Scalar／ReDoc、静态文件类型和路径穿越防护 | `api/tests/api.rs`、`api/tests/migration.rs`、`api/tests/review.rs`、`web/tests/review.spec.js` |
 | GitHub Pages | 从 README 和 OpenAPI 生成页面、README 目录、部署地址配置、仓库子路径、桌面／手机布局、深浅色截图及文档导航 | `web/tests/pages.spec.js` |
-| 生产镜像 | amd64／arm64 的真实容器启动、前端资源、认证、跳转、统计、备份恢复、原生健康检查；启动期间连接重置／中断／超时重试、持续失败超时、错误版本仍失败 | `.github/scripts/smoke.py`、`.github/scripts/test_smoke.py`、发布工作流 |
+| 生产镜像 | amd64／arm64 的真实容器启动、前端资源、API Key 生成／使用／撤销、跳转、统计、备份恢复、原生健康检查；启动期间连接重置／中断／超时重试、持续失败超时、错误版本仍失败 | `.github/scripts/smoke.py`、`.github/scripts/test_smoke.py`、发布工作流 |
 | 发布版本 | 必须使用稳定的 `vMAJOR.MINOR.PATCH`，四个版本文件一致，缺失凭据时拒绝执行，Actions 输出格式 | `.github/scripts/test_release.py` |
 | 发布镜像完整性 | 必须同时包含两个架构，拒绝缺失／非法摘要、错误平台、重复架构、未经测试的镜像，以及版本与 latest 不一致 | `.github/scripts/test_verify_images.py` |
 
