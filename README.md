@@ -62,6 +62,12 @@ docker compose up -d
 | `APP_NAME` | `str` | `Link WithU` | 管理面板名称 |
 | `TZ` | `str` | `Asia/Shanghai` | 统计时区，修改后重新创建容器生效 |
 
+## 程序调用
+
+服务提供 HTTP API，支持其他程序及具备 HTTP 工具的 LLM 调用，覆盖链接管理、访问统计、设置和备份恢复。部署后访问 `/docs`（Scalar）或 `/redoc` 查看由 `/openapi.json` 自动生成的接口文档；文档界面需要浏览器连接 jsDelivr，接口定义本身可直接读取。通过 `POST /api/admin/login` 提交 JSON 密码获取令牌，在管理接口请求中携带 `Authorization: Bearer <token>`；令牌有效期为 24 小时。`GET /api/links/by-code/{short_code}` 可按短码精确读取单条链接。
+
+[在线文档](https://explorer-dong.github.io/link-withu/)
+
 ## 界面截图
 
 <details>

@@ -1,32 +1,27 @@
-
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link type="text/css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
-    <link rel="shortcut icon" href="/favicon.svg">
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="/favicon.svg">
     <title>Link WithU API</title>
-    </head>
-    <body>
-    <div id="swagger-ui">
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-    <!-- `SwaggerUIBundle` is now available on the page -->
-    <script>
-    const ui = SwaggerUIBundle({
-        url: '/openapi.json',
-    "dom_id": "#swagger-ui",
-"layout": "BaseLayout",
-"deepLinking": true,
-"showExtensions": true,
-"showCommonExtensions": true,
-
-    presets: [
-        SwaggerUIBundle.presets.apis,
-        SwaggerUIBundle.SwaggerUIStandalonePreset
-        ],
-    })
+  </head>
+  <body>
+    <div id="api-reference">正在加载接口文档…</div>
+    <script type="module">
+      try {
+        const { createApiReference } = await import('https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.75.1/esm.js');
+        createApiReference('#api-reference', {
+          url: '/openapi.json',
+          servers: [{ url: window.location.origin }],
+          withDefaultFonts: false,
+          persistAuth: false,
+          showDeveloperTools: 'never',
+          agent: { disabled: true },
+        });
+      } catch {
+        document.querySelector('#api-reference').textContent = '接口文档加载失败，请检查网络；接口定义可通过 /openapi.json 获取。';
+      }
     </script>
-    </body>
-    </html>
-    
+  </body>
+</html>

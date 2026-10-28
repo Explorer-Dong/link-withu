@@ -54,6 +54,9 @@ pub fn dispatch(conn: &Connection, c: &Config, i: Input) -> Result<Reply> {
         ("POST", "/api/links") => create(conn, c, &i),
         ("GET", "/api/links") => list(conn, c, &i),
         ("GET", "/api/links/tags") => tags(conn, c, &i),
+        ("GET", p) if p.starts_with("/api/links/by-code/") && !p[19..].contains('/') => {
+            get_link(conn, c, &i)
+        }
         ("GET", "/api/analytics") => {
             limited_query(&i)?;
             crate::analytics::analytics(conn, c, &i)
@@ -256,6 +259,22 @@ pub fn tags(conn: &Connection, _c: &Config, _i: &Input) -> Result<Reply> {
         "SELECT name,COUNT(*) AS link_count FROM link_tags GROUP BY name ORDER BY name",
         &[]
     )?)))
+}
+
+#[utoipa::path(get,path="/api/links/by-code/{short_code}",tag="links",params(("short_code"=String,Path)),responses((status=200,body=crate::models::LinkResponse),(status=401,body=crate::models::ApiError),(status=404,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+pub fn get_link(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
+    let link = db::link(conn, &i.path[19..])?;
+    let count = db::scalar(
+        conn,
+        "SELECT COUNT(*) FROM visits WHERE short_link_id=?",
+        &[link["id"].clone()],
+    )?;
+    Ok(Reply::json(response(
+        conn,
+        link,
+        &validation::get_site(conn, c)?,
+        count,
+    )?))
 }
 
 #[utoipa::path(get,path="/r/{short_code}",tag="redirect",params(("short_code"=String,Path)),responses((status=302),(status=422,body=crate::models::ApiError)))]

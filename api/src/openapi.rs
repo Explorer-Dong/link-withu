@@ -13,6 +13,7 @@ use utoipa::OpenApi;
         api::create,
         api::list,
         api::tags,
+        api::get_link,
         api::visits,
         api::update,
         api::delete,
@@ -27,8 +28,11 @@ use utoipa::OpenApi;
 )]
 struct ApiDoc;
 pub fn document(c: &Config) -> Value {
+    document_for(&c.app_name)
+}
+pub fn document_for(app_name: &str) -> Value {
     let mut doc = ApiDoc::openapi();
-    doc.info.title = c.app_name.clone();
+    doc.info.title = app_name.into();
     doc.info.version = VERSION.into();
     doc.info.description = Some("短链管理、本地访问统计与在线 IP 地理位置解析。位置结果缓存在本地；访问明细、位置排行、CSV 和 JSON 备份共享该缓存。".into());
     let mut doc = serde_json::to_value(doc).expect("OpenAPI serialization");

@@ -9,6 +9,7 @@ fn private_management_and_invalid_authentication() {
     for path in [
         "/api/links",
         "/api/links/tags",
+        "/api/links/by-code/example",
         "/api/analytics",
         "/api/admin/settings",
         "/api/admin/backup",
@@ -32,6 +33,31 @@ fn private_management_and_invalid_authentication() {
             401
         );
     }
+}
+#[test]
+fn read_link_by_exact_short_code() {
+    let s = Server::new();
+    let created = s.create("tags", json!({"title":"示例","tags":["技术"]}));
+    s.create("tags-extra", json!({}));
+    assert_eq!(s.get("/r/tags").status(), 302);
+    let link = s.json("/api/links/by-code/tags");
+    assert_eq!(link["id"], created["id"]);
+    assert_eq!(link["title"], "示例");
+    assert_eq!(link["tags"], json!(["技术"]));
+    assert_eq!(link["visit_count"], 1);
+    assert_eq!(s.get("/api/links/by-code/missing").status(), 404);
+    assert!(s.json("/api/links/tags").is_array());
+
+    s.sql("UPDATE short_links SET short_code='中文' WHERE short_code='tags-extra';");
+    assert_eq!(
+        s.json("/api/links/by-code/%E4%B8%AD%E6%96%87")["short_code"],
+        "中文"
+    );
+    assert_eq!(s.delete("/api/links/tags").status(), 204);
+    assert_eq!(s.get("/api/links/by-code/tags").status(), 404);
+    let method = s.post("/api/links/by-code/tags", &json!({}));
+    assert_eq!(method.status(), 405);
+    assert_eq!(method.headers()["allow"], "GET");
 }
 #[test]
 fn crud_search_tags_sort_and_public_redirect() {
@@ -457,6 +483,14 @@ fn generated_openapi_versions_routes_and_spa_boundaries() {
     let health = s.json("/api/health");
     assert_eq!(health["version"], env!("CARGO_PKG_VERSION"));
     let document = s.json("/openapi.json");
+    let generated = std::process::Command::new(common::binary())
+        .arg("--openapi")
+        .env("DATABASE_URL", "invalid")
+        .output()
+        .unwrap();
+    assert!(generated.status.success());
+    let generated: Value = serde_json::from_slice(&generated.stdout).unwrap();
+    assert_eq!(generated, document);
     assert_eq!(document["info"]["version"], env!("CARGO_PKG_VERSION"));
     assert!(document["components"]["schemas"]["BackupVisit"].is_object());
     assert_eq!(
@@ -470,6 +504,7 @@ fn generated_openapi_versions_routes_and_spa_boundaries() {
         ("/api/links", "get"),
         ("/api/links", "post"),
         ("/api/links/tags", "get"),
+        ("/api/links/by-code/{short_code}", "get"),
         ("/api/links/stats/{short_code}", "get"),
         ("/api/links/{short_code}", "put"),
         ("/api/links/{short_code}", "delete"),
@@ -506,7 +541,15 @@ fn generated_openapi_versions_routes_and_spa_boundaries() {
         .sum::<usize>();
     // A new documented operation must also be added to the reviewed test inventory.
     assert_eq!(documented_operations, expected_operations.len());
-    assert_eq!(s.get("/docs").status(), 200);
+    let reference = &document["paths"]["/api/links/by-code/{short_code}"]["get"];
+    assert_eq!(reference["security"][0]["bearer_auth"], json!([]));
+    assert!(reference["responses"]["200"].is_object());
+    assert!(reference["responses"]["404"].is_object());
+    let docs = s.get("/docs");
+    assert_eq!(docs.status(), 200);
+    let docs = docs.text().unwrap();
+    assert!(docs.contains("@scalar/api-reference@1.75.1/esm.js"));
+    assert!(docs.contains("url: '/openapi.json'"));
     assert_eq!(s.get("/redoc").status(), 200);
     assert_eq!(s.post("/api/links/tags", &json!({})).status(), 405);
     assert_eq!(s.get("/api/not-a-route").status(), 404);

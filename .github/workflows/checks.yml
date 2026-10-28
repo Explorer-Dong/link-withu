@@ -33,12 +33,16 @@ jobs:
           workspaces: api
       - name: Install frontend dependencies
         run: npm ci --prefix web
+      - name: Install documentation dependencies
+        run: npm ci --prefix .github/pages
       - name: Backend format and lint
         run: |
           cargo fmt --manifest-path api/Cargo.toml -- --check
           cargo clippy --manifest-path api/Cargo.toml --all-targets --locked -- -D warnings
       - name: Check frontend format
-        run: npm run format:check --prefix web
+        run: |
+          npm run format:check --prefix web
+          web/node_modules/.bin/prettier --check .github/pages/build.mjs .github/pages/style.css
       - name: Build frontend
         run: npm run build --prefix web
       - name: API, migration and recovery tests

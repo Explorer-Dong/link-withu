@@ -438,6 +438,10 @@ async fn main() {
         println!("v{VERSION}; SQLite {}", rusqlite::version());
         return;
     }
+    if std::env::args().any(|arg| arg == "--openapi") {
+        println!("{}", openapi::document_for("Link WithU"));
+        return;
+    }
     let config = Config::load().unwrap_or_else(|e| {
         eprintln!("{e}");
         std::process::exit(1)

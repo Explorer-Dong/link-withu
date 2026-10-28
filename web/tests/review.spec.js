@@ -13,6 +13,48 @@ import {
 
 test.beforeEach(resetData);
 
+test("API documentation uses the current OpenAPI description and handles a failed loader", async ({
+  page,
+}) => {
+  const cdn =
+    "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.75.1/esm.js";
+  await page.route(cdn, (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      headers: { "access-control-allow-origin": "*" },
+      body: `export async function createApiReference(selector, config) {
+        const document = await (await fetch(config.url)).json();
+        globalThis.referenceConfig = config;
+        globalThis.referenceDocument = document;
+        window.document.querySelector(selector).textContent = document.info.title;
+      }`,
+    }),
+  );
+  await page.goto("/docs");
+  await expect(page.locator("#api-reference")).toHaveText("Link WithU");
+  expect(await page.evaluate(() => window.referenceConfig.persistAuth)).toBe(
+    false,
+  );
+  expect(await page.evaluate(() => window.referenceConfig.agent.disabled)).toBe(
+    true,
+  );
+  expect(await page.evaluate(() => window.referenceConfig.servers[0].url)).toBe(
+    "http://127.0.0.1:5202",
+  );
+  expect(
+    await page.evaluate(
+      () =>
+        !!window.referenceDocument.paths["/api/links/by-code/{short_code}"].get,
+    ),
+  ).toBe(true);
+  await page.unroute(cdn);
+  await page.route(cdn, (route) => route.abort());
+  await page.reload();
+  await expect(page.locator("#api-reference")).toContainText(
+    "接口文档加载失败",
+  );
+});
+
 test("locations show beside IP addresses and share analytics filters", async ({
   page,
   request,
