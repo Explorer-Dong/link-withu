@@ -171,6 +171,13 @@ test("README and API pages render under a project subpath", async ({
   );
   const spec = await (await request.get(`${base}openapi.json`)).json();
   expect(spec.paths["/api/links/by-code/{short_code}"].get).toBeTruthy();
+  expect(spec.paths["/api/links"].post.summary).toBe("创建短链");
+  expect(spec.paths["/api/links/{short_code}"].delete.description).toContain(
+    "访问记录",
+  );
+  expect(spec.paths["/api/admin/restore"].post.description).toContain(
+    "RESTORE",
+  );
   await page.getByRole("link", { name: "README", exact: true }).click();
   await expect(page).toHaveURL(base);
   expect(

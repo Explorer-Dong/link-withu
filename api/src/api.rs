@@ -90,7 +90,10 @@ pub fn dispatch(conn: &Connection, c: &Config, i: Input) -> Result<Reply> {
     }
 }
 
-#[utoipa::path(post,path="/api/admin/login",tag="admin",request_body=crate::models::LoginRequest,responses((status=200,body=crate::models::LoginResponse),(status=422,body=crate::models::ApiError)))]
+/// 管理员登录
+///
+/// 使用管理员密码获取有效期为 24 小时的 Bearer 会话令牌及过期时间。修改管理员密码后，旧会话失效。
+#[utoipa::path(post,path="/api/admin/login",tag="admin",request_body=crate::models::LoginRequest,responses((status=200,body=crate::models::LoginResponse),(status=401,body=crate::models::ApiError),(status=422,body=crate::models::ApiError),(status=503,body=crate::models::ApiError)))]
 pub fn login(_conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     ensure(!c.password.is_empty(), 503, "管理员密码未配置")?;
     let body: models::LoginRequest =
@@ -116,6 +119,9 @@ pub fn login(_conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     ))
 }
 
+/// 获取公开站点信息
+///
+/// 返回站点名称和应用版本，供登录页等公开页面展示。此接口无需认证。
 #[utoipa::path(get,path="/api/site",tag="site",responses((status=200,body=crate::models::Site),(status=422,body=crate::models::ApiError)))]
 pub fn site(conn: &Connection, c: &Config, _i: &Input) -> Result<Reply> {
     Ok(Reply::json(
@@ -123,6 +129,9 @@ pub fn site(conn: &Connection, c: &Config, _i: &Input) -> Result<Reply> {
     ))
 }
 
+/// 获取管理设置
+///
+/// 返回站点设置、应用版本、数据库大小、链接和访问记录数量、可信代理层数以及 API Key 是否已生成。响应不包含 API Key 明文。
 #[utoipa::path(get,path="/api/admin/settings",tag="admin",responses((status=200,body=crate::models::AdminSettings),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn read_settings(conn: &Connection, c: &Config, _i: &Input) -> Result<Reply> {
     Ok(Reply::json(
@@ -130,7 +139,9 @@ pub fn read_settings(conn: &Connection, c: &Config, _i: &Input) -> Result<Reply>
     ))
 }
 
-/// 生成 API Key。
+/// 生成或轮换 API Key
+///
+/// 生成具有管理员权限的 Bearer API Key。明文只在本次响应中返回；重新生成会立即使旧 Key 失效。数据库仅保存摘要，备份不包含 Key。
 #[utoipa::path(post,path="/api/admin/api-key",tag="admin",responses((status=200,body=crate::models::ApiKeyCreated),(status=401,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn generate_api_key(conn: &Connection, c: &Config) -> Result<Reply> {
     let mut random = [0u8; 32];
@@ -145,7 +156,9 @@ pub fn generate_api_key(conn: &Connection, c: &Config) -> Result<Reply> {
     Ok(Reply::json(json!({"api_key":key})).header("cache-control", "no-store"))
 }
 
-/// 撤销 API Key。
+/// 撤销 API Key
+///
+/// 撤销当前 API Key，使其立即无法访问管理接口。已有管理员登录会话继续有效。
 #[utoipa::path(delete,path="/api/admin/api-key",tag="admin",responses((status=204),(status=401,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn revoke_api_key(conn: &Connection) -> Result<Reply> {
     db::exec(conn, "DELETE FROM api_credentials WHERE id=1", &[])?;
@@ -156,6 +169,9 @@ pub fn revoke_api_key(conn: &Connection) -> Result<Reply> {
     })
 }
 
+/// 更新站点设置
+///
+/// 保存站点名称、短链公开地址和随机短码长度，并返回规范化后的设置。统计时区由服务的 TZ 环境变量决定，需要重启服务才能修改。
 #[utoipa::path(put,path="/api/admin/settings",tag="admin",request_body=crate::models::SiteSettings,responses((status=200,body=crate::models::SiteSettings),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn update_settings(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let body = validation::site(&i.json()?)?;
@@ -163,7 +179,10 @@ pub fn update_settings(conn: &Connection, c: &Config, i: &Input) -> Result<Reply
     Ok(Reply::json(validation::get_site(conn, c)?))
 }
 
-#[utoipa::path(post,path="/api/links",tag="links",request_body=crate::models::CreateLink,responses((status=201,body=crate::models::LinkResponse),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+/// 创建短链
+///
+/// 根据目标地址创建短链，可同时设置标题、备注和标签。未提供短码时自动生成；自定义短码已存在时返回 409。成功后返回完整短链信息。
+#[utoipa::path(post,path="/api/links",tag="links",request_body=crate::models::CreateLink,responses((status=201,body=crate::models::LinkResponse),(status=409,body=crate::models::ApiError),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn create(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let body = i.json()?;
     let fields = validation::fields(&body)?;
@@ -216,7 +235,10 @@ pub fn create(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     Err(error(503, "生成短码失败，请重试"))
 }
 
-#[utoipa::path(get,path="/api/links",tag="links",params(("skip"=Option<i64>,Query,minimum=0,example=0),("limit"=Option<i64>,Query,minimum=1,maximum=100,example=10),("q"=Option<String>,Query,max_length=200),("tag"=Option<String>,Query,max_length=40),("sort"=Option<String>,Query,pattern="^(newest|oldest|visits)$",example="newest")),responses((status=200,body=crate::models::LinkList),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+/// 查询短链列表
+///
+/// 分页获取短链及其访问次数，可按关键词搜索名称、备注、地址、短码和标签，并按标签筛选。返回匹配总数和当前页；默认每页 10 条。
+#[utoipa::path(get,path="/api/links",tag="links",params(("skip"=Option<i64>,Query,minimum=0,example=0,description="跳过的记录数，默认 0"),("limit"=Option<i64>,Query,minimum=1,maximum=100,example=10,description="每页记录数，默认 10，最大 100"),("q"=Option<String>,Query,max_length=200,description="搜索名称、备注、目标地址、短码或标签"),("tag"=Option<String>,Query,max_length=40,description="按标签精确筛选"),("sort"=Option<String>,Query,pattern="^(newest|oldest|visits)$",example="newest",description="排序方式：newest 最新、oldest 最早、visits 访问次数；默认 newest")),responses((status=200,body=crate::models::LinkList),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn list(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let skip = i.number("skip", 0, 0, i64::MAX)?;
     let limit = i.number("limit", 10, 1, 100)?;
@@ -280,6 +302,9 @@ pub fn list(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     Ok(Reply::json(json!({"total":total,"items":items?})))
 }
 
+/// 获取标签列表
+///
+/// 返回所有已使用的标签及各自关联的短链数量，可用于构建标签筛选器。
 #[utoipa::path(get,path="/api/links/tags",tag="links",responses((status=200,body=Vec<crate::models::Tag>),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn tags(conn: &Connection, _c: &Config, _i: &Input) -> Result<Reply> {
     Ok(Reply::json(json!(db::rows(
@@ -289,7 +314,10 @@ pub fn tags(conn: &Connection, _c: &Config, _i: &Input) -> Result<Reply> {
     )?)))
 }
 
-#[utoipa::path(get,path="/api/links/by-code/{short_code}",tag="links",params(("short_code"=String,Path,example="example")),responses((status=200,body=crate::models::LinkResponse),(status=401,body=crate::models::ApiError),(status=404,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+/// 按短码获取短链
+///
+/// 精确查询单条短链，返回目标地址、标题、备注、标签、短链地址及累计访问次数。短码不存在时返回 404。
+#[utoipa::path(get,path="/api/links/by-code/{short_code}",tag="links",params(("short_code"=String,Path,example="example",description="要查询的短码")),responses((status=200,body=crate::models::LinkResponse),(status=401,body=crate::models::ApiError),(status=404,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn get_link(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let link = db::link(conn, &i.path[19..])?;
     let count = db::scalar(
@@ -305,7 +333,10 @@ pub fn get_link(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     )?))
 }
 
-#[utoipa::path(get,path="/r/{short_code}",tag="redirect",params(("short_code"=String,Path,example="example")),responses((status=302),(status=422,body=crate::models::ApiError)))]
+/// 访问短链并跳转
+///
+/// 公开访问短码对应的目标地址。服务先保存访问记录，再以 302 和 Location 响应头跳转；响应体为空。短码不存在时返回 404。
+#[utoipa::path(get,path="/r/{short_code}",tag="redirect",params(("short_code"=String,Path,example="example",description="要访问的短码")),responses((status=302),(status=404,body=crate::models::ApiError)))]
 pub fn redirect(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let p = i.path.as_str();
     let link = db::link(conn, &p[3..])?;
@@ -359,7 +390,12 @@ pub fn redirect(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     })
 }
 
-#[utoipa::path(get,path="/api/links/stats/{short_code}",tag="links",params(("short_code"=String,Path,example="example"),("skip"=Option<i64>,Query,minimum=0,example=0),("limit"=Option<i64>,Query,minimum=1,maximum=200,example=50),("exclude_bots"=Option<bool>,Query,example=false),("start_date"=Option<String>,Query,format=Date),("end_date"=Option<String>,Query,format=Date)),responses((status=200,body=crate::models::VisitStats),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+/// 查询短链访问明细
+///
+/// 返回指定短链的访问总数和分页明细，包括访问时间、IP、地理位置、来源、设备及浏览器。可按日期和机器人筛选；默认每页 50 条。
+///
+/// start_date 和 end_date 必须同时提供，格式为 YYYY-MM-DD，按站点时区包含起止两天；未指定时间筛选时查询全部历史。日期区间不能与非零 days 同用。
+#[utoipa::path(get,path="/api/links/stats/{short_code}",tag="links",params(("short_code"=String,Path,example="example",description="要查询的短码"),("skip"=Option<i64>,Query,minimum=0,example=0,description="跳过的记录数，默认 0"),("limit"=Option<i64>,Query,minimum=1,maximum=200,example=50,description="每页记录数，默认 50，最大 200"),("exclude_bots"=Option<bool>,Query,example=false,description="是否排除疑似机器人访问，默认 false"),("start_date"=Option<String>,Query,format=Date,description="开始日期，与 end_date 同时提供"),("end_date"=Option<String>,Query,format=Date,description="结束日期，包含当天"),("days"=Option<i64>,Query,minimum=0,maximum=90,description="最近 N 天，包含今天；0 不启用天数筛选")),responses((status=200,body=crate::models::VisitStats),(status=404,body=crate::models::ApiError),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn visits(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let p = i.path.as_str();
     let link = db::link(conn, &p[17..])?;
@@ -397,7 +433,10 @@ pub fn visits(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     ))
 }
 
-#[utoipa::path(put,path="/api/links/{short_code}",tag="links",request_body=crate::models::LinkFields,params(("short_code"=String,Path,example="example")),responses((status=200,body=crate::models::LinkResponse),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+/// 更新短链
+///
+/// 更新指定短链的目标地址、标题、备注和标签，短码保持不变。必须提供 original_url；未提供的标题、备注和标签会重置为空。
+#[utoipa::path(put,path="/api/links/{short_code}",tag="links",request_body=crate::models::LinkFields,params(("short_code"=String,Path,example="example",description="要更新的短码")),responses((status=200,body=crate::models::LinkResponse),(status=404,body=crate::models::ApiError),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn update(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let p = i.path.as_str();
     let code = &p[11..];
@@ -432,7 +471,10 @@ pub fn update(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     )?))
 }
 
-#[utoipa::path(delete,path="/api/links/{short_code}",tag="links",params(("short_code"=String,Path,example="example")),responses((status=204),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+/// 删除短链
+///
+/// 删除指定短链及其关联的全部访问记录和标签。成功后返回 204，短码不存在时返回 404。
+#[utoipa::path(delete,path="/api/links/{short_code}",tag="links",params(("short_code"=String,Path,example="example",description="要删除的短码")),responses((status=204),(status=404,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn delete(conn: &Connection, _c: &Config, i: &Input) -> Result<Reply> {
     let p = i.path.as_str();
     let link = db::link(conn, &p[11..])?;
@@ -475,6 +517,9 @@ impl Write for LimitedFile {
         self.file.flush()
     }
 }
+/// 导出完整 JSON 备份
+///
+/// 下载包含全部短链、标签、访问记录和站点设置的版本 1 JSON 备份。API Key 和管理员密码不包含在备份中；备份超过 50 MiB 时返回 413。
 #[utoipa::path(get,path="/api/admin/backup",tag="admin",responses((status=200,body=crate::models::BackupData),(status=413,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn backup(conn: &Connection, c: &Config) -> Result<Reply> {
     let mut output = LimitedFile {

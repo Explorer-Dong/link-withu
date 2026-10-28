@@ -258,7 +258,12 @@ fn stage(receiver: tokio::sync::mpsc::Receiver<Bytes>, c: Config) -> Result<Stag
         .map_err(|_| error(400, "备份存在无对应短链的访问记录，现有数据未修改"))?;
     Ok(staged)
 }
-#[utoipa::path(post,path="/api/admin/restore",tag="admin",request_body=crate::models::BackupData,params(("X-Confirm-Restore"=String,Header,description="必须为 RESTORE")),responses((status=200,body=crate::models::RestoreResponse),(status=400,body=crate::models::ApiError),(status=409,body=crate::models::ApiError),(status=413,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+/// 从 JSON 备份覆盖恢复
+///
+/// 上传版本 1 的 Link WithU JSON 备份，并在请求头中设置 X-Confirm-Restore: RESTORE。校验通过后，备份中的短链、访问记录和站点设置会原子替换当前数据；当前 API Key 保留。
+///
+/// 备份最大 50 MiB，同时只允许一次恢复。格式错误或恢复失败时保留原有数据；成功后返回恢复的短链和访问记录数量。
+#[utoipa::path(post,path="/api/admin/restore",tag="admin",request_body=crate::models::BackupData,params(("X-Confirm-Restore"=String,Header,description="必须为 RESTORE",example="RESTORE")),responses((status=200,body=crate::models::RestoreResponse),(status=400,body=crate::models::ApiError),(status=409,body=crate::models::ApiError),(status=413,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub async fn receive(app: &App, headers: &HeaderMap, body: Body) -> Result<Reply> {
     ensure(
         headers

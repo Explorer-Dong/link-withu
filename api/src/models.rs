@@ -44,14 +44,18 @@ pub fn tags<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Vec<Str
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct LinkFields {
+    /// 跳转目标地址，支持 HTTP／HTTPS；未填写协议时默认使用 HTTPS，不接受带账号密码的地址。
     #[schema(min_length = 1, max_length = 2048, example = "https://example.com")]
     pub original_url: String,
+    /// 短链标题；更新时省略会清空。
     #[serde(default)]
     #[schema(max_length = 120)]
     pub title: String,
+    /// 备注；更新时省略会清空。
     #[serde(default)]
     #[schema(max_length = 2000)]
     pub note: String,
+    /// 标签列表，最多 20 项；更新时省略会清空。
     #[serde(default, deserialize_with = "tags")]
     #[schema(max_items = 20)]
     pub tags: Vec<String>,
@@ -60,19 +64,24 @@ pub struct LinkFields {
 pub struct CreateLink {
     #[serde(flatten)]
     pub fields: LinkFields,
+    /// 自定义短码；省略或留空时自动生成，支持英文字母、数字、横线和下划线。
     #[schema(max_length = 32, pattern = "^[A-Za-z0-9_-]+$", example = "example")]
     pub short_code: Option<String>,
 }
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct SiteSettings {
+    /// 站点名称。
     #[serde(default = "default_name")]
     #[schema(min_length = 1, max_length = 60)]
     pub app_name: String,
+    /// 短链的公开地址，只包含协议、域名和可选端口。
     #[serde(default = "default_base")]
     #[schema(max_length = 2048)]
     pub base_url: String,
+    /// 当前统计时区由服务的 TZ 环境变量决定，设置接口不保存该字段。
     #[serde(default = "default_timezone")]
     pub timezone: String,
+    /// 自动生成短码的长度，范围为 4–16。
     #[serde(default = "default_length")]
     #[schema(minimum = 4, maximum = 16)]
     pub random_code_length: i64,
@@ -147,12 +156,15 @@ pub struct BackupData {
 }
 #[derive(Deserialize, ToSchema)]
 pub struct LoginRequest {
+    /// 管理员密码，由 ADMIN_PASSWORD 配置。
     #[schema(max_length = 1024)]
     pub password: String,
 }
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct LoginResponse {
+    /// 有效期 24 小时的 Bearer 会话令牌。
     pub token: String,
+    /// 令牌过期时间，Unix 秒级时间戳。
     pub expires_at: i64,
 }
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -212,6 +224,7 @@ pub struct AdminSettings {
 }
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ApiKeyCreated {
+    /// 新生成的 Bearer API Key，仅在本次响应中返回。
     pub api_key: String,
 }
 #[derive(Serialize, Deserialize, ToSchema)]

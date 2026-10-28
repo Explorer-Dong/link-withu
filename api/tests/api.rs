@@ -647,9 +647,19 @@ fn generated_openapi_versions_routes_and_spa_boundaries() {
         ("/api/admin/restore", "post"),
     ];
     for (path, method) in expected_operations {
+        let operation = &document["paths"][path][method];
+        assert!(operation.is_object(), "{method} {path}");
         assert!(
-            document["paths"][path][method].is_object(),
-            "{method} {path}"
+            operation["summary"]
+                .as_str()
+                .is_some_and(|s| !s.trim().is_empty()),
+            "missing summary: {method} {path}"
+        );
+        assert!(
+            operation["description"]
+                .as_str()
+                .is_some_and(|s| !s.trim().is_empty()),
+            "missing description: {method} {path}"
         );
     }
     let documented_operations = document["paths"]
@@ -670,6 +680,31 @@ fn generated_openapi_versions_routes_and_spa_boundaries() {
         .sum::<usize>();
     // A new documented operation must also be added to the reviewed test inventory.
     assert_eq!(documented_operations, expected_operations.len());
+    assert!(
+        document["paths"]["/api/links/{short_code}"]["delete"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("访问记录")
+    );
+    assert!(
+        document["paths"]["/api/admin/restore"]["post"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("RESTORE")
+    );
+    assert!(
+        document["paths"]["/api/analytics/export"]["get"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("只按短码和标签筛选")
+    );
+    assert!(
+        document["paths"]["/api/links/stats/{short_code}"]["get"]["parameters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|param| param["name"] == "days")
+    );
     let reference = &document["paths"]["/api/links/by-code/{short_code}"]["get"];
     assert_eq!(reference["security"][0]["bearer_auth"], json!([]));
     assert!(reference["responses"]["200"].is_object());

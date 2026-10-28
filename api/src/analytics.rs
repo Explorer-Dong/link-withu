@@ -138,7 +138,12 @@ fn count(conn: &Connection, sql: &str, params: &[Value]) -> Result<i64> {
     Ok(db::scalar(conn, sql, params)?.as_i64().unwrap_or(0))
 }
 const JOINED: &str = "FROM visits v JOIN short_links s ON s.id=v.short_link_id";
-#[utoipa::path(get,path="/api/analytics",tag="analytics",params(("start_date"=Option<String>,Query,format=Date,description="开始日期，按站点时区，含当天；与 end_date 配对使用"),("end_date"=Option<String>,Query,format=Date,description="结束日期，按站点时区，含当天"),("days"=Option<i64>,Query,minimum=0,maximum=90,example=0),("short_code"=Option<String>,Query,max_length=32),("tag"=Option<String>,Query,max_length=40),("exclude_bots"=Option<bool>,Query,example=false)),responses((status=200,body=crate::models::Analytics),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+/// 获取访问统计概览
+///
+/// 返回访问汇总、趋势，以及热门短链、来源、设备、浏览器、标签和地理位置的前三项。可按短码、标签、日期和机器人类型筛选。
+///
+/// 默认查询全部历史；start_date 和 end_date 必须成对提供，按站点时区包含起止两天，且不能与非零 days 同用。summary.total_visits 是匹配短码、标签及机器人筛选后的累计访问量；summary.period_visits 是所选时间区间的访问量。完整排行使用分类详情接口查询。
+#[utoipa::path(get,path="/api/analytics",tag="analytics",params(("start_date"=Option<String>,Query,format=Date,description="开始日期，按站点时区，含当天；与 end_date 配对使用"),("end_date"=Option<String>,Query,format=Date,description="结束日期，按站点时区，含当天"),("days"=Option<i64>,Query,minimum=0,maximum=90,example=0,description="最近 N 天，包含今天；0 不启用天数筛选；非零值不能与日期区间同用"),("short_code"=Option<String>,Query,max_length=32,description="只统计指定短码"),("tag"=Option<String>,Query,max_length=40,description="只统计带指定标签的短链"),("exclude_bots"=Option<bool>,Query,example=false,description="是否排除疑似机器人访问，默认 false")),responses((status=200,body=crate::models::Analytics),(status=404,body=crate::models::ApiError),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn analytics(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let days = i.number("days", 0, 0, 90)?;
     let exclude = i.boolean("exclude_bots")?;
@@ -247,7 +252,12 @@ pub fn analytics(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
         "top_links":preview("top_links")?,"referrers":preview("referrers")?,"devices":preview("devices")?,"browsers":preview("browsers")?,"tags":preview("tags")?,"locations":preview("locations")?
     })))
 }
-#[utoipa::path(get,path="/api/analytics/breakdown",tag="analytics",params(("kind"=String,Query,pattern="^(referrers|devices|browsers|top_links|tags|locations)$",example="locations"),("skip"=Option<i64>,Query,minimum=0),("limit"=Option<i64>,Query,minimum=1,maximum=100),("start_date"=Option<String>,Query,format=Date),("end_date"=Option<String>,Query,format=Date),("days"=Option<i64>,Query,minimum=0,maximum=90),("short_code"=Option<String>,Query,max_length=32),("tag"=Option<String>,Query,max_length=40),("exclude_bots"=Option<bool>,Query)),responses((status=200,body=crate::models::BreakdownPage),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+/// 查询统计分类详情
+///
+/// 按类别分页获取完整排行及匹配项总数，适用于查看统计概览前三项以外的数据。kind 支持 referrers（来源）、devices（设备）、browsers（浏览器）、top_links（热门短链）、tags（标签）和 locations（地理位置）；默认每页 6 项。
+///
+/// 可使用与统计概览相同的短码、标签、日期和机器人筛选。日期按站点时区包含起止两天；start_date 和 end_date 必须成对提供，不能与非零 days 同用。
+#[utoipa::path(get,path="/api/analytics/breakdown",tag="analytics",params(("kind"=String,Query,pattern="^(referrers|devices|browsers|top_links|tags|locations)$",example="locations",description="排行类别"),("skip"=Option<i64>,Query,minimum=0,description="跳过的排行项数，默认 0"),("limit"=Option<i64>,Query,minimum=1,maximum=100,description="每页项数，默认 6，最大 100"),("start_date"=Option<String>,Query,format=Date,description="开始日期，与 end_date 同时提供"),("end_date"=Option<String>,Query,format=Date,description="结束日期，包含当天"),("days"=Option<i64>,Query,minimum=0,maximum=90,description="最近 N 天，包含今天；0 不启用天数筛选"),("short_code"=Option<String>,Query,max_length=32,description="只统计指定短码"),("tag"=Option<String>,Query,max_length=40,description="只统计带指定标签的短链"),("exclude_bots"=Option<bool>,Query,description="是否排除疑似机器人访问，默认 false")),responses((status=200,body=crate::models::BreakdownPage),(status=404,body=crate::models::ApiError),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn breakdown(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     if !i.param("short_code").is_empty() {
         db::link(conn, i.param("short_code"))?;
@@ -274,7 +284,12 @@ fn safe(value: &Value) -> String {
         s
     }
 }
-#[utoipa::path(get,path="/api/analytics/export",tag="analytics",params(("start_date"=Option<String>,Query,format=Date),("end_date"=Option<String>,Query,format=Date),("kind"=Option<String>,Query,pattern="^(visits|links)$",example="visits"),("days"=Option<i64>,Query,minimum=0,maximum=90),("short_code"=Option<String>,Query,max_length=32),("tag"=Option<String>,Query,max_length=40),("exclude_bots"=Option<bool>,Query,example=false)),responses((status=200,body=String,content_type="text/csv")),security(("bearer_auth"=[])))]
+/// 导出访问记录或短链 CSV
+///
+/// 下载 UTF-8 CSV 文件。kind=visits（默认）导出访问明细，支持短码、标签、日期和机器人筛选；kind=links 导出短链，只按短码和标签筛选。文件包含 BOM，并对电子表格公式进行防护。
+///
+/// 访问记录的 start_date 和 end_date 必须成对提供，按站点时区包含起止两天，不能与非零 days 同用。
+#[utoipa::path(get,path="/api/analytics/export",tag="analytics",params(("start_date"=Option<String>,Query,format=Date,description="访问记录开始日期，与 end_date 同时提供"),("end_date"=Option<String>,Query,format=Date,description="访问记录结束日期，包含当天"),("kind"=Option<String>,Query,pattern="^(visits|links)$",example="visits",description="visits 导出访问记录，links 导出短链；默认 visits"),("days"=Option<i64>,Query,minimum=0,maximum=90,description="访问记录的最近 N 天，0 不启用天数筛选"),("short_code"=Option<String>,Query,max_length=32,description="只导出指定短码"),("tag"=Option<String>,Query,max_length=40,description="只导出带指定标签的短链或访问记录"),("exclude_bots"=Option<bool>,Query,example=false,description="是否排除疑似机器人访问，默认 false")),responses((status=200,body=String,content_type="text/csv"),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn export(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let kind = if i.param("kind").is_empty() {
         "visits"

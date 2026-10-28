@@ -315,6 +315,9 @@ async fn authenticate(app: &App, headers: &HeaderMap) -> Result<()> {
         "管理员登录已过期",
     )
 }
+/// 检查服务状态
+///
+/// 返回服务状态和当前版本，可用于容器健康检查。此接口无需认证。
 #[utoipa::path(get,path="/api/health",tag="health",responses((status=200,body=models::Health)))]
 fn health() -> Reply {
     Reply::json(json!({"status":"ok","version":VERSION}))
