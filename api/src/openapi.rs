@@ -10,6 +10,8 @@ use utoipa::OpenApi;
         api::site,
         api::read_settings,
         api::update_settings,
+        api::generate_api_key,
+        api::revoke_api_key,
         api::create,
         api::list,
         api::tags,
@@ -34,9 +36,9 @@ pub fn document_for(app_name: &str) -> Value {
     let mut doc = ApiDoc::openapi();
     doc.info.title = app_name.into();
     doc.info.version = VERSION.into();
-    doc.info.description = Some("短链管理、本地访问统计与在线 IP 地理位置解析。位置结果缓存在本地；访问明细、位置排行、CSV 和 JSON 备份共享该缓存。".into());
+    doc.info.description = Some("在设置页面生成 API Key，使用 Authorization: Bearer <API Key> 访问管理接口。API Key 拥有管理员权限，仅在生成时显示；重新生成、撤销或修改管理员密码后失效。短链管理、本地访问统计与在线 IP 地理位置解析的结果保存在本地。".into());
     let mut doc = serde_json::to_value(doc).expect("OpenAPI serialization");
-    doc["components"]["securitySchemes"] = json!({"bearer_auth":{"type":"http","scheme":"bearer"}});
+    doc["components"]["securitySchemes"] = json!({"bearer_auth":{"type":"http","scheme":"bearer","description":"在设置页面生成 API Key，放入 Authorization: Bearer <API Key>。"}});
     doc
 }
 pub fn allowed_methods(path: &str) -> Option<String> {

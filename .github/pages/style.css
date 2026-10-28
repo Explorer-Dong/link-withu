@@ -35,6 +35,11 @@ a:hover {
 }
 .pages-nav {
   display: flex;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
   gap: 6px;
   padding: 20px 16px;
   border-right: 1px solid var(--line);
@@ -51,6 +56,28 @@ a:hover {
   background: var(--background);
   color: var(--text);
   font-weight: 600;
+}
+.pages-toc {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.pages-toc summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  color: var(--text);
+  font-weight: 600;
+}
+.pages-toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pages-toc a {
+  display: block;
+}
+.pages-toc .h3 a {
+  padding-left: 24px;
 }
 .pages-readme {
   width: min(100%, 960px);
@@ -122,9 +149,35 @@ a:hover {
 .pages-api-layout > .pages-nav {
   grid-area: 1/1;
 }
-#api-reference {
+.pages-docs {
   min-width: 0;
   grid-area: 1/2;
+}
+.pages-server {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.pages-server input {
+  min-width: 0;
+  width: min(100%, 320px);
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--text);
+}
+.pages-server button {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -148,10 +201,18 @@ a:hover {
     display: block;
   }
   .pages-nav {
+    position: static;
+    height: auto;
+    overflow: visible;
     flex-direction: row;
+    flex-wrap: wrap;
     border-right: 0;
     border-bottom: 1px solid var(--line);
     padding: 8px 12px;
+  }
+  .pages-toc {
+    width: 100%;
+    margin: 0;
   }
   .pages-readme {
     padding: 28px 20px 64px;
@@ -165,6 +226,9 @@ a:hover {
   }
 }
 .pages-api-layout .selected-client-action,
+.pages-api-layout .generate-sdk-button,
+.pages-api-layout .explore-scalar-cta,
+.pages-api-layout .explore-scalar-card,
 .pages-api-layout a[href^="https://scalar.com/?utm_source=powered-by"] {
   display: none !important;
 }

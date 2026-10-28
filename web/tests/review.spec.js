@@ -13,6 +13,66 @@ import {
 
 test.beforeEach(resetData);
 
+test("API Key can be generated, rotated and revoked from settings", async ({
+  page,
+  request,
+}) => {
+  await login(page);
+  await navigate(page, "设置");
+  await page.getByRole("button", { name: "生成 API Key", exact: true }).click();
+  const key = await page.getByLabel("新 API Key").inputValue();
+  expect(key).toMatch(/^lwu_[A-Za-z0-9_-]{43}$/);
+  expect(
+    (
+      await request.get("/api/links", {
+        headers: { Authorization: `Bearer ${key}` },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.reload();
+  await expect(page.getByLabel("新 API Key")).toHaveCount(0);
+  await page.route("**/api/admin/api-key", (route) =>
+    route.fulfill({ status: 503, json: { detail: "暂时不可用" } }),
+  );
+  await page.getByRole("button", { name: "重新生成 API Key" }).click();
+  await expect(page.getByText("暂时不可用")).toBeVisible();
+  expect(
+    (
+      await request.get("/api/links", {
+        headers: { Authorization: `Bearer ${key}` },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.unroute("**/api/admin/api-key");
+  await page.getByRole("button", { name: "重新生成 API Key" }).click();
+  const replacement = await page.getByLabel("新 API Key").inputValue();
+  expect(replacement).not.toBe(key);
+  expect(
+    (
+      await request.get("/api/links", {
+        headers: { Authorization: `Bearer ${key}` },
+      })
+    ).status(),
+  ).toBe(401);
+  expect(
+    (
+      await request.get("/api/links", {
+        headers: { Authorization: `Bearer ${replacement}` },
+      })
+    ).status(),
+  ).toBe(200);
+  await assertNoOverflow(page);
+  await page.getByRole("button", { name: "撤销 API Key" }).click();
+  await expect(page.getByLabel("新 API Key")).toHaveCount(0);
+  expect(
+    (
+      await request.get("/api/links", {
+        headers: { Authorization: `Bearer ${replacement}` },
+      })
+    ).status(),
+  ).toBe(401);
+});
+
 test("API documentation uses the current OpenAPI description and handles a failed loader", async ({
   page,
 }) => {

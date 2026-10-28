@@ -51,6 +51,8 @@ pub fn dispatch(conn: &Connection, c: &Config, i: Input) -> Result<Reply> {
         ("GET", "/api/site") => site(conn, c, &i),
         ("GET", "/api/admin/settings") => read_settings(conn, c, &i),
         ("PUT", "/api/admin/settings") => update_settings(conn, c, &i),
+        ("POST", "/api/admin/api-key") => generate_api_key(conn, c),
+        ("DELETE", "/api/admin/api-key") => revoke_api_key(conn),
         ("POST", "/api/links") => create(conn, c, &i),
         ("GET", "/api/links") => list(conn, c, &i),
         ("GET", "/api/links/tags") => tags(conn, c, &i),
@@ -124,8 +126,34 @@ pub fn site(conn: &Connection, c: &Config, _i: &Input) -> Result<Reply> {
 #[utoipa::path(get,path="/api/admin/settings",tag="admin",responses((status=200,body=crate::models::AdminSettings),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn read_settings(conn: &Connection, c: &Config, _i: &Input) -> Result<Reply> {
     Ok(Reply::json(
-        json!({"site":validation::get_site(conn,c)?,"version":VERSION,"database_bytes":std::fs::metadata(&c.database).map(|m|m.len()).unwrap_or(0),"trusted_proxy_count":c.trusted,"max_restore_bytes":MAX_BACKUP,"links":db::scalar(conn,"SELECT COUNT(*) FROM short_links",&[])?,"visits":db::scalar(conn,"SELECT COUNT(*) FROM visits",&[])?}),
+        json!({"site":validation::get_site(conn,c)?,"version":VERSION,"database_bytes":std::fs::metadata(&c.database).map(|m|m.len()).unwrap_or(0),"trusted_proxy_count":c.trusted,"max_restore_bytes":MAX_BACKUP,"links":db::scalar(conn,"SELECT COUNT(*) FROM short_links",&[])?,"visits":db::scalar(conn,"SELECT COUNT(*) FROM visits",&[])? ,"api_key_configured":db::scalar(conn,"SELECT EXISTS(SELECT 1 FROM api_credentials WHERE id=1)",&[])?.as_i64()==Some(1)}),
     ))
+}
+
+/// 生成 API Key。
+#[utoipa::path(post,path="/api/admin/api-key",tag="admin",responses((status=200,body=crate::models::ApiKeyCreated),(status=401,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+pub fn generate_api_key(conn: &Connection, c: &Config) -> Result<Reply> {
+    let mut random = [0u8; 32];
+    rand::rng().fill(&mut random);
+    let key = format!("lwu_{}", URL_SAFE_NO_PAD.encode(random));
+    let hash = URL_SAFE_NO_PAD.encode(sign(c, &key).finalize().into_bytes());
+    db::exec(
+        conn,
+        "INSERT INTO api_credentials(id,key_hash) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET key_hash=excluded.key_hash",
+        &[json!(hash)],
+    )?;
+    Ok(Reply::json(json!({"api_key":key})).header("cache-control", "no-store"))
+}
+
+/// 撤销 API Key。
+#[utoipa::path(delete,path="/api/admin/api-key",tag="admin",responses((status=204),(status=401,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+pub fn revoke_api_key(conn: &Connection) -> Result<Reply> {
+    db::exec(conn, "DELETE FROM api_credentials WHERE id=1", &[])?;
+    Ok(Reply {
+        status: 204,
+        headers: vec![("cache-control".into(), "no-store".into())],
+        body: Payload::Bytes(vec![]),
+    })
 }
 
 #[utoipa::path(put,path="/api/admin/settings",tag="admin",request_body=crate::models::SiteSettings,responses((status=200,body=crate::models::SiteSettings),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
@@ -261,7 +289,7 @@ pub fn tags(conn: &Connection, _c: &Config, _i: &Input) -> Result<Reply> {
     )?)))
 }
 
-#[utoipa::path(get,path="/api/links/by-code/{short_code}",tag="links",params(("short_code"=String,Path)),responses((status=200,body=crate::models::LinkResponse),(status=401,body=crate::models::ApiError),(status=404,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+#[utoipa::path(get,path="/api/links/by-code/{short_code}",tag="links",params(("short_code"=String,Path,example="example")),responses((status=200,body=crate::models::LinkResponse),(status=401,body=crate::models::ApiError),(status=404,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn get_link(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let link = db::link(conn, &i.path[19..])?;
     let count = db::scalar(
@@ -277,7 +305,7 @@ pub fn get_link(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     )?))
 }
 
-#[utoipa::path(get,path="/r/{short_code}",tag="redirect",params(("short_code"=String,Path)),responses((status=302),(status=422,body=crate::models::ApiError)))]
+#[utoipa::path(get,path="/r/{short_code}",tag="redirect",params(("short_code"=String,Path,example="example")),responses((status=302),(status=422,body=crate::models::ApiError)))]
 pub fn redirect(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let p = i.path.as_str();
     let link = db::link(conn, &p[3..])?;
@@ -331,7 +359,7 @@ pub fn redirect(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     })
 }
 
-#[utoipa::path(get,path="/api/links/stats/{short_code}",tag="links",params(("short_code"=String,Path),("skip"=Option<i64>,Query,minimum=0,example=0),("limit"=Option<i64>,Query,minimum=1,maximum=200,example=50),("exclude_bots"=Option<bool>,Query,example=false),("start_date"=Option<String>,Query,format=Date),("end_date"=Option<String>,Query,format=Date)),responses((status=200,body=crate::models::VisitStats),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+#[utoipa::path(get,path="/api/links/stats/{short_code}",tag="links",params(("short_code"=String,Path,example="example"),("skip"=Option<i64>,Query,minimum=0,example=0),("limit"=Option<i64>,Query,minimum=1,maximum=200,example=50),("exclude_bots"=Option<bool>,Query,example=false),("start_date"=Option<String>,Query,format=Date),("end_date"=Option<String>,Query,format=Date)),responses((status=200,body=crate::models::VisitStats),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn visits(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let p = i.path.as_str();
     let link = db::link(conn, &p[17..])?;
@@ -369,7 +397,7 @@ pub fn visits(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     ))
 }
 
-#[utoipa::path(put,path="/api/links/{short_code}",tag="links",request_body=crate::models::LinkFields,params(("short_code"=String,Path)),responses((status=200,body=crate::models::LinkResponse),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+#[utoipa::path(put,path="/api/links/{short_code}",tag="links",request_body=crate::models::LinkFields,params(("short_code"=String,Path,example="example")),responses((status=200,body=crate::models::LinkResponse),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn update(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     let p = i.path.as_str();
     let code = &p[11..];
@@ -404,7 +432,7 @@ pub fn update(conn: &Connection, c: &Config, i: &Input) -> Result<Reply> {
     )?))
 }
 
-#[utoipa::path(delete,path="/api/links/{short_code}",tag="links",params(("short_code"=String,Path)),responses((status=204),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
+#[utoipa::path(delete,path="/api/links/{short_code}",tag="links",params(("short_code"=String,Path,example="example")),responses((status=204),(status=422,body=crate::models::ApiError)),security(("bearer_auth"=[])))]
 pub fn delete(conn: &Connection, _c: &Config, i: &Input) -> Result<Reply> {
     let p = i.path.as_str();
     let link = db::link(conn, &p[11..])?;

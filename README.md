@@ -64,9 +64,9 @@ docker compose up -d
 
 ## 程序调用
 
-服务提供 HTTP API，支持其他程序及具备 HTTP 工具的 LLM 调用，覆盖链接管理、访问统计、设置和备份恢复。部署后访问 `/docs`（Scalar）或 `/redoc` 查看由 `/openapi.json` 自动生成的接口文档；文档界面需要浏览器连接 jsDelivr，接口定义本身可直接读取。通过 `POST /api/admin/login` 提交 JSON 密码获取令牌，在管理接口请求中携带 `Authorization: Bearer <token>`；令牌有效期为 24 小时。`GET /api/links/by-code/{short_code}` 可按短码精确读取单条链接。
+服务提供 HTTP API，支持其他程序及具备 HTTP 工具的 LLM 调用。登录后在设置页生成 API Key，通过 `Authorization: Bearer <API Key>` 调用；重新生成、撤销或修改管理员密码后旧密钥失效。部署后的 `/docs`（Scalar）与 `/redoc` 使用 `/openapi.json` 生成接口文档；文档界面需要连接 jsDelivr。
 
-[在线文档](https://explorer-dong.github.io/link-withu/)
+[在线文档](https://explorer-dong.github.io/link-withu/)可填写部署地址，生成对应的调用命令。
 
 ## 界面截图
 

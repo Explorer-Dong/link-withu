@@ -42,7 +42,7 @@ jobs:
       - name: Check frontend format
         run: |
           npm run format:check --prefix web
-          web/node_modules/.bin/prettier --check .github/pages/build.mjs .github/pages/style.css
+          web/node_modules/.bin/prettier --check .github/pages/build.mjs .github/pages/docs.js .github/pages/style.css
       - name: Build frontend
         run: npm run build --prefix web
       - name: API, migration and recovery tests

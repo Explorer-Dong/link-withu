@@ -268,7 +268,7 @@ fn sign(config: &Config, payload: &str) -> Hmac<Sha256> {
     mac.update(payload.as_bytes());
     mac
 }
-fn authenticate(config: &Config, headers: &HeaderMap) -> Result<()> {
+async fn authenticate(app: &App, headers: &HeaderMap) -> Result<()> {
     let value = headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
@@ -278,7 +278,22 @@ fn authenticate(config: &Config, headers: &HeaderMap) -> Result<()> {
         .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
         .ok_or_else(|| error(401, "请先登录管理员"))?;
     let token = token.trim();
+    let config = &app.config;
     ensure(!config.password.is_empty(), 503, "管理员密码未配置")?;
+    if token.starts_with("lwu_") {
+        ensure(token.len() == 47, 401, "API Key 无效")?;
+        let stored = app
+            .reader
+            .value(|conn| db::scalar(conn, "SELECT key_hash FROM api_credentials WHERE id=1", &[]))
+            .await?;
+        let hash = stored
+            .as_str()
+            .and_then(|value| URL_SAFE_NO_PAD.decode(value).ok())
+            .ok_or_else(|| error(401, "API Key 无效"))?;
+        return sign(config, token)
+            .verify_slice(&hash)
+            .map_err(|_| error(401, "API Key 无效"));
+    }
     let (payload, signature) = token
         .split_once('.')
         .ok_or_else(|| error(401, "管理员登录无效"))?;
@@ -383,7 +398,7 @@ async fn handle_result(app: Arc<App>, peer: SocketAddr, request: Request) -> Res
         || path.starts_with("/api/admin/"))
         && path != "/api/admin/login"
     {
-        authenticate(&app.config, &parts.headers)?;
+        authenticate(&app, &parts.headers).await?;
     }
     if parts.method == "POST" && path == "/api/admin/restore" {
         return restore::receive(&app, &parts.headers, body).await;

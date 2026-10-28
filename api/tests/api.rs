@@ -60,6 +60,133 @@ fn read_link_by_exact_short_code() {
     assert_eq!(method.headers()["allow"], "GET");
 }
 #[test]
+fn api_key_lifecycle_persists_without_exposing_secrets() {
+    let mut s = Server::new();
+    assert_eq!(
+        s.request(Method::POST, "/api/admin/api-key", None, false)
+            .status(),
+        401
+    );
+    assert_eq!(s.json("/api/admin/settings")["api_key_configured"], false);
+    let generated = s.post("/api/admin/api-key", &json!({}));
+    assert_eq!(generated.status(), 200);
+    assert_eq!(generated.headers()["cache-control"], "no-store");
+    let key = generated.json::<Value>().unwrap()["api_key"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(key.starts_with("lwu_") && key.len() == 47);
+    let hashed: String = rusqlite::Connection::open(&s.database)
+        .unwrap()
+        .query_row(
+            "SELECT key_hash FROM api_credentials WHERE id=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_ne!(hashed, key);
+    assert_eq!(s.json("/api/admin/settings")["api_key_configured"], true);
+    let create = s
+        .client
+        .post(format!("{}/api/links", s.base))
+        .bearer_auth(&key)
+        .json(&json!({"short_code":"agent-key","original_url":"https://example.com"}))
+        .send()
+        .unwrap();
+    assert_eq!(create.status(), 201);
+    assert_eq!(
+        s.client
+            .get(format!("{}/api/links/by-code/agent-key", s.base))
+            .bearer_auth(&key)
+            .send()
+            .unwrap()
+            .status(),
+        200
+    );
+    let backup = s.json("/api/admin/backup");
+    let serialized = backup.to_string();
+    assert!(!serialized.contains(&key));
+    assert!(!serialized.contains(&hashed));
+    assert_eq!(s.restore(&backup).status(), 200);
+    assert_eq!(
+        s.client
+            .get(format!("{}/api/links", s.base))
+            .bearer_auth(&key)
+            .send()
+            .unwrap()
+            .status(),
+        200
+    );
+    s.stop();
+    let directory = std::mem::replace(&mut s.directory, tempfile::tempdir().unwrap());
+    s = Server::from_directory(directory, "Asia/Shanghai", 0);
+    assert_eq!(
+        s.client
+            .get(format!("{}/api/links", s.base))
+            .bearer_auth(&key)
+            .send()
+            .unwrap()
+            .status(),
+        200
+    );
+    let replacement = s
+        .post("/api/admin/api-key", &json!({}))
+        .json::<Value>()
+        .unwrap()["api_key"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_ne!(key, replacement);
+    assert_eq!(
+        s.client
+            .get(format!("{}/api/links", s.base))
+            .bearer_auth(&key)
+            .send()
+            .unwrap()
+            .status(),
+        401
+    );
+    assert_eq!(
+        s.client
+            .get(format!("{}/api/links", s.base))
+            .bearer_auth(&replacement)
+            .send()
+            .unwrap()
+            .status(),
+        200
+    );
+    assert_eq!(s.delete("/api/admin/api-key").status(), 204);
+    assert_eq!(
+        s.client
+            .get(format!("{}/api/links", s.base))
+            .bearer_auth(&replacement)
+            .send()
+            .unwrap()
+            .status(),
+        401
+    );
+    assert_eq!(s.json("/api/admin/settings")["api_key_configured"], false);
+    let last = s
+        .post("/api/admin/api-key", &json!({}))
+        .json::<Value>()
+        .unwrap()["api_key"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    s.stop();
+    let directory = std::mem::replace(&mut s.directory, tempfile::tempdir().unwrap());
+    s = Server::from_directory_with_env(directory, &[("ADMIN_PASSWORD", "new-password")]);
+    assert_eq!(
+        s.client
+            .get(format!("{}/api/links", s.base))
+            .bearer_auth(&last)
+            .send()
+            .unwrap()
+            .status(),
+        401
+    );
+}
+#[test]
 fn crud_search_tags_sort_and_public_redirect() {
     let s = Server::new();
     let one = s.create(
@@ -514,6 +641,8 @@ fn generated_openapi_versions_routes_and_spa_boundaries() {
         ("/api/analytics/export", "get"),
         ("/api/admin/settings", "get"),
         ("/api/admin/settings", "put"),
+        ("/api/admin/api-key", "post"),
+        ("/api/admin/api-key", "delete"),
         ("/api/admin/backup", "get"),
         ("/api/admin/restore", "post"),
     ];
@@ -545,6 +674,11 @@ fn generated_openapi_versions_routes_and_spa_boundaries() {
     assert_eq!(reference["security"][0]["bearer_auth"], json!([]));
     assert!(reference["responses"]["200"].is_object());
     assert!(reference["responses"]["404"].is_object());
+    assert_eq!(reference["parameters"][0]["example"], "example");
+    assert_eq!(
+        document["paths"]["/api/analytics/breakdown"]["get"]["parameters"][0]["example"],
+        "locations"
+    );
     let docs = s.get("/docs");
     assert_eq!(docs.status(), 200);
     let docs = docs.text().unwrap();

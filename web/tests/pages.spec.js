@@ -39,6 +39,7 @@ test.beforeAll(async () => {
           html: "text/html; charset=utf-8",
           json: "application/json",
           css: "text/css",
+          js: "text/javascript",
           png: "image/png",
         }[extension] || "application/octet-stream",
       );
@@ -59,25 +60,41 @@ test.afterAll(async () => {
 test("README and API pages render under a project subpath", async ({
   page,
   request,
-}) => {
+}, testInfo) => {
   const cdn =
     "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.75.1/esm.js";
   await page.route(cdn, (route) =>
     route.fulfill({
       contentType: "text/javascript",
       headers: { "access-control-allow-origin": "*" },
-      body: `export async function createApiReference(selector, config) {
-      const data = await (await fetch(config.url)).json();
-      window.scalarConfig = config;
+      body: `export function createApiReference(selector, config) {
+      window.scalarConfig = structuredClone(config);
+      window.scalarMounts = (window.scalarMounts || 0) + 1;
       window.document.querySelector('.pages-api-layout').insertBefore(
-        window.document.createElement('div'), window.document.querySelector(selector));
-      window.document.querySelector(selector).textContent = data.info.title + ' ' + data.info.version;
+        window.document.createElement('div'), window.document.querySelector('.pages-docs'));
+      fetch(config.url).then(response => response.json()).then(data => {
+        window.document.querySelector(selector).textContent = data.info.title + ' ' + data.info.version;
+      });
+      return { destroy() {} };
     }`,
     }),
   );
   await page.goto(base);
   await expect(page.getByRole("heading", { name: "Link WithU" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "快速开始" })).toBeVisible();
+  const toc = page.locator(".pages-toc");
+  expect(await toc.evaluate((element) => element.open)).toBe(
+    testInfo.project.name === "desktop",
+  );
+  if (!(await toc.evaluate((element) => element.open)))
+    await toc.locator("summary").click();
+  const jump = toc.getByRole("link", { name: "快速开始", exact: true });
+  await expect(jump).toBeVisible();
+  await jump.click();
+  await expect(page).toHaveURL(/#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B$/i);
+  await expect(
+    page.getByRole("heading", { name: "快速开始" }),
+  ).toBeInViewport();
   await page.getByText("桌面端", { exact: true }).click();
   const light = page.locator('a[href$="#gh-light-mode-only"] img').first();
   const dark = page.locator('a[href$="#gh-dark-mode-only"] img').first();
@@ -111,6 +128,34 @@ test("README and API pages render under a project subpath", async ({
   expect(
     await page.evaluate(() => window.scalarConfig.hideTestRequestButton),
   ).toBe(true);
+  await page.getByLabel("部署地址").fill("https://short.example:8443");
+  await page.getByRole("button", { name: "应用地址" }).click();
+  expect(await page.evaluate(() => window.scalarConfig.servers[0].url)).toBe(
+    "https://short.example:8443",
+  );
+  expect(await page.evaluate(() => window.scalarMounts)).toBe(2);
+  await page
+    .getByLabel("部署地址")
+    .fill("https://user:password@invalid.example");
+  await page.getByRole("button", { name: "应用地址" }).click();
+  expect(
+    await page
+      .getByLabel("部署地址")
+      .evaluate((element) => element.validationMessage),
+  ).toContain("部署地址");
+  expect(await page.evaluate(() => window.scalarConfig.servers[0].url)).toBe(
+    "https://short.example:8443",
+  );
+  await page.reload();
+  await expect(page.getByLabel("部署地址")).toHaveValue(
+    "https://short.example:8443",
+  );
+  await expect(page.locator("#api-reference")).toHaveText(
+    `Link WithU ${version}`,
+  );
+  expect(await page.evaluate(() => window.scalarConfig.servers[0].url)).toBe(
+    "https://short.example:8443",
+  );
   const spec = await (await request.get(`${base}openapi.json`)).json();
   expect(spec.paths["/api/links/by-code/{short_code}"].get).toBeTruthy();
   await page.getByRole("link", { name: "README", exact: true }).click();

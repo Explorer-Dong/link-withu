@@ -35,6 +35,12 @@ impl Server {
     pub fn from_directory(directory: tempfile::TempDir, tz: &str, trusted: usize) -> Self {
         Self::start(directory, tz, trusted, &[])
     }
+    pub fn from_directory_with_env(
+        directory: tempfile::TempDir,
+        environment: &[(&str, &str)],
+    ) -> Self {
+        Self::start(directory, "Asia/Shanghai", 0, environment)
+    }
     pub fn with_env(environment: &[(&str, &str)]) -> Self {
         Self::start(
             tempfile::tempdir().unwrap(),

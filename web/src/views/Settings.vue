@@ -5,7 +5,7 @@ import PageHeading from "../components/PageHeading.vue";
 import Icon from "../components/Icon.vue";
 import Modal from "../components/Modal.vue";
 import { api, download } from "../api/links";
-import { theme, site, notify, number, saveSession, tags } from "../state";
+import { theme, site, notify, number, saveSession, tags, copy } from "../state";
 const router = useRouter();
 const info = ref(null),
   error = ref(""),
@@ -15,6 +15,7 @@ const info = ref(null),
   restoreFile = ref(null),
   restorePreview = ref(null),
   confirmation = ref(""),
+  apiKey = ref(""),
   fileInput = ref(null);
 const form = reactive({
   app_name: "",
@@ -64,6 +65,32 @@ async function exportAllData() {
   try {
     await download("/api/admin/backup");
     notify("全部数据已导出");
+  } catch (e) {
+    notify(e.message, true);
+  } finally {
+    busy.value = "";
+  }
+}
+async function generateApiKey() {
+  busy.value = "api-key";
+  try {
+    const result = await api("/api/admin/api-key", { method: "POST" });
+    apiKey.value = result.api_key;
+    info.value.api_key_configured = true;
+    notify("API Key 已生成");
+  } catch (e) {
+    notify(e.message, true);
+  } finally {
+    busy.value = "";
+  }
+}
+async function revokeApiKey() {
+  busy.value = "api-key";
+  try {
+    await api("/api/admin/api-key", { method: "DELETE" });
+    apiKey.value = "";
+    info.value.api_key_configured = false;
+    notify("API Key 已撤销");
   } catch (e) {
     notify(e.message, true);
   } finally {
@@ -207,6 +234,46 @@ onMounted(load);
         <div class="setting-info-row">
           <span>可信反向代理层数</span
           ><strong>{{ info.trusted_proxy_count }}</strong>
+        </div>
+        <div class="setting-info-row">
+          <span>API Key</span
+          ><strong>{{ info.api_key_configured ? "已生成" : "未生成" }}</strong>
+        </div>
+        <p class="muted small">
+          API Key
+          拥有管理员权限，仅在生成时显示；重新生成或修改管理员密码后原密钥失效。
+        </p>
+        <div v-if="apiKey" class="stack-form">
+          <label
+            >新 API Key<input
+              aria-label="新 API Key"
+              :value="apiKey"
+              autocomplete="off"
+              spellcheck="false"
+              readonly
+          /></label>
+          <button class="btn" type="button" @click="copy(apiKey)">
+            复制 API Key
+          </button>
+        </div>
+        <div class="backup-actions">
+          <button
+            class="btn"
+            type="button"
+            :disabled="saving || !!busy"
+            @click="generateApiKey"
+          >
+            {{ info.api_key_configured ? "重新生成 API Key" : "生成 API Key" }}
+          </button>
+          <button
+            v-if="info.api_key_configured"
+            class="btn"
+            type="button"
+            :disabled="saving || !!busy"
+            @click="revokeApiKey"
+          >
+            撤销 API Key
+          </button>
         </div>
         <p class="muted small">
           密码与代理层数通过环境变量配置，修改后重启容器。

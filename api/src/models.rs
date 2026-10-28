@@ -44,7 +44,7 @@ pub fn tags<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Vec<Str
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct LinkFields {
-    #[schema(min_length = 1, max_length = 2048)]
+    #[schema(min_length = 1, max_length = 2048, example = "https://example.com")]
     pub original_url: String,
     #[serde(default)]
     #[schema(max_length = 120)]
@@ -60,7 +60,7 @@ pub struct LinkFields {
 pub struct CreateLink {
     #[serde(flatten)]
     pub fields: LinkFields,
-    #[schema(max_length = 32, pattern = "^[A-Za-z0-9_-]+$")]
+    #[schema(max_length = 32, pattern = "^[A-Za-z0-9_-]+$", example = "example")]
     pub short_code: Option<String>,
 }
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -208,6 +208,11 @@ pub struct AdminSettings {
     pub max_restore_bytes: usize,
     pub links: i64,
     pub visits: i64,
+    pub api_key_configured: bool,
+}
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct ApiKeyCreated {
+    pub api_key: String,
 }
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct VisitStats {
